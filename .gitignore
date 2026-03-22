@@ -1,2 +1,33 @@
 # Python
-__pycache__
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Type checking & linting caches
+.mypy_cache/
+.ruff_cache/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+coverage.xml
+test-results.xml
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+
+# Secrets — never commit
+.env
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
