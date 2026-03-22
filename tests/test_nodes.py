@@ -1,7 +1,7 @@
 """Unit tests for all LangGraph nodes.
 
 Every external dependency is mocked:
-- LLM calls (ChatAnthropic.with_structured_output, create_react_agent)
+- LLM calls (ChatAnthropic.with_structured_output, create_agent)
 - IMDBAPIClient (async context manager)
 - MovieSearchService
 - get_config → uses mock_config fixture from conftest
@@ -663,7 +663,7 @@ class TestQaAgentNode:
         with (
             patch("chain.nodes.qa_agent.get_config", return_value=mock_config),
             patch("chain.nodes.qa_agent.IMDBAPIClient") as mock_client_cls,
-            patch("chain.nodes.qa_agent.create_react_agent", return_value=mock_agent),
+            patch("chain.nodes.qa_agent.create_agent", return_value=mock_agent),
         ):
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -693,7 +693,7 @@ class TestQaAgentNode:
         with (
             patch("chain.nodes.qa_agent.get_config", return_value=mock_config),
             patch("chain.nodes.qa_agent.IMDBAPIClient") as mock_client_cls,
-            patch("chain.nodes.qa_agent.create_react_agent", return_value=mock_agent),
+            patch("chain.nodes.qa_agent.create_agent", return_value=mock_agent),
         ):
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)

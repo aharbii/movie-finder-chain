@@ -21,9 +21,9 @@ import logging
 from imdbapi import IMDBAPIClient  # type: ignore[attr-defined]
 from imdbapi.langchain.agent import MOVIE_AGENT_SYSTEM_PROMPT
 from imdbapi.langchain.tools import create_imdb_tools
+from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import BaseMessage
-from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import BaseMessage, HumanMessage
 
 from chain.config import get_config
 from chain.state import MovieFinderState
@@ -44,18 +44,26 @@ async def qa_agent_node(state: MovieFinderState) -> dict:
         api_key=cfg.anthropic_api_key,
     )
 
+    # Anthropic requires the conversation to end with a HumanMessage.
+    # The confirmation node appends an AIMessage before routing here, so trim it.
+    last_human_idx = max(
+        (i for i, m in enumerate(messages) if isinstance(m, HumanMessage)),
+        default=len(messages) - 1,
+    )
+    messages_for_agent = messages[: last_human_idx + 1]
+
     async with IMDBAPIClient() as client:
         tools = create_imdb_tools(client)
         # No checkpointer here — state is managed by the outer graph
-        agent = create_react_agent(llm, tools, state_modifier=system_prompt)
+        agent = create_agent(llm, tools, system_prompt=system_prompt)
 
         result = await agent.ainvoke(
-            {"messages": messages},
+            {"messages": messages_for_agent},
             config={"configurable": {}},
         )
 
     # Extract only the messages that the agent added (everything beyond input)
-    new_messages: list[BaseMessage] = result["messages"][len(messages) :]
+    new_messages: list[BaseMessage] = result["messages"][len(messages_for_agent) :]
 
     logger.info(
         "Q&A agent produced %d new message(s) for '%s'",

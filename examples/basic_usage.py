@@ -204,10 +204,8 @@ async def main() -> None:
     print("Requires: .env file with valid API keys and a populated Qdrant instance.")
 
     await demo_discovery()
-
-    # Uncomment the demos you want to run:
-    # await demo_full_conversation()
-    # await demo_refinement()
+    await demo_full_conversation()
+    await demo_refinement()
 
 
 if __name__ == "__main__":
