@@ -1,0 +1,719 @@
+"""Unit tests for all LangGraph nodes.
+
+Every external dependency is mocked:
+- LLM calls (ChatAnthropic.with_structured_output, create_react_agent)
+- IMDBAPIClient (async context manager)
+- MovieSearchService
+- get_config → uses mock_config fixture from conftest
+
+Tests validate:
+- Correct state keys are written
+- Edge cases (empty candidates, unclear responses, max refinements)
+- Error handling (LLM failure, IMDB call failure)
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage
+
+from chain.models.output import ConfirmationClassification, RefinementPlan
+from chain.nodes.confirmation import confirmation_node
+from chain.nodes.dead_end import dead_end_node
+from chain.nodes.imdb_enrichment import _compute_confidence, imdb_enrichment_node
+from chain.nodes.presentation import presentation_node
+from chain.nodes.qa_agent import _build_system_prompt, qa_agent_node
+from chain.nodes.rag_search import rag_search_node
+from chain.nodes.refinement import refinement_node
+from chain.nodes.validation import validation_node
+
+# ===========================================================================
+# rag_search_node
+# ===========================================================================
+
+
+class TestRagSearchNode:
+    @pytest.mark.asyncio
+    async def test_extracts_query_from_last_human_message(self, mock_config: Any) -> None:
+        """Uses last HumanMessage content when user_plot_query is not set."""
+        state = {
+            "messages": [HumanMessage("A movie where dreams are invaded")],
+            "user_plot_query": "",
+        }
+
+        mock_candidates = [
+            MagicMock(
+                model_dump=lambda: {
+                    "title": "Inception",
+                    "release_year": 2010,
+                    "director": "",
+                    "genre": [],
+                    "cast": [],
+                    "plot": "",
+                }
+            )
+        ]
+
+        with (
+            patch("chain.nodes.rag_search.get_config", return_value=mock_config),
+            patch("chain.nodes.rag_search.MovieSearchService") as mock_svc_cls,
+        ):
+            mock_svc = mock_svc_cls.return_value
+            mock_svc.search.return_value = mock_candidates
+
+            result = await rag_search_node(state, {})  # type: ignore[arg-type]
+
+        assert result["user_plot_query"] == "A movie where dreams are invaded"
+        assert len(result["rag_candidates"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_prefers_explicit_user_plot_query(self, mock_config: Any) -> None:
+        """An explicit user_plot_query overrides the last message content."""
+        state = {
+            "messages": [HumanMessage("original message")],
+            "user_plot_query": "refined: a sci-fi heist set in dreams",
+        }
+
+        with (
+            patch("chain.nodes.rag_search.get_config", return_value=mock_config),
+            patch("chain.nodes.rag_search.MovieSearchService") as mock_svc_cls,
+        ):
+            mock_svc = mock_svc_cls.return_value
+            mock_svc.search.return_value = []
+
+            result = await rag_search_node(state, {})  # type: ignore[arg-type]
+
+        assert "refined" in result["user_plot_query"]
+
+    @pytest.mark.asyncio
+    async def test_empty_query_returns_empty_candidates(self, mock_config: Any) -> None:
+        state: dict[str, Any] = {"messages": [], "user_plot_query": ""}
+
+        with (
+            patch("chain.nodes.rag_search.get_config", return_value=mock_config),
+            patch("chain.nodes.rag_search.MovieSearchService"),
+        ):
+            result = await rag_search_node(state, {})  # type: ignore[arg-type]
+
+        assert result["rag_candidates"] == []
+
+
+# ===========================================================================
+# imdb_enrichment_node
+# ===========================================================================
+
+
+class TestImdbEnrichmentNode:
+    @pytest.mark.asyncio
+    async def test_returns_enriched_movies_when_match_found(
+        self, mock_config: Any, sample_rag_candidates: list[dict[str, Any]]
+    ) -> None:
+        """Enriches each candidate when IMDB search returns a confident match."""
+        state = {"rag_candidates": sample_rag_candidates[:1]}  # just Inception
+
+        # Fake IMDB search result
+        mock_search_hit = MagicMock()
+        mock_search_hit.id = "tt1375666"
+        mock_search_hit.start_year = 2010
+        mock_search_hit.primary_title = "Inception"
+
+        mock_search_resp = MagicMock()
+        mock_search_resp.titles = [mock_search_hit]
+
+        # Fake full title from batch_get
+        mock_full_title = MagicMock()
+        mock_full_title.id = "tt1375666"
+        mock_full_title.primary_title = "Inception"
+        mock_full_title.start_year = 2010
+        mock_full_title.rating = MagicMock(aggregate_rating=8.8)
+        mock_full_title.plot = "A thief who steals secrets."
+        mock_full_title.genres = ["Action", "Sci-Fi"]
+        mock_full_title.directors = [MagicMock(display_name="Christopher Nolan")]
+        mock_full_title.stars = [MagicMock(display_name="Leonardo DiCaprio")]
+        mock_full_title.primary_image = MagicMock(url="https://example.com/poster.jpg")
+
+        mock_batch_resp = MagicMock()
+        mock_batch_resp.titles = [mock_full_title]
+
+        mock_client = AsyncMock()
+        mock_client.search.titles = AsyncMock(return_value=mock_search_resp)
+        mock_client.titles.batch_get = AsyncMock(return_value=mock_batch_resp)
+
+        # Patch IMDBAPIClient as async context manager
+        with (
+            patch("chain.nodes.imdb_enrichment.get_config", return_value=mock_config),
+            patch("chain.nodes.imdb_enrichment.IMDBAPIClient") as mock_client_cls,
+        ):
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await imdb_enrichment_node(state)  # type: ignore[arg-type]
+
+        enriched = result["enriched_movies"]
+        assert len(enriched) == 1
+        assert enriched[0]["imdb_id"] == "tt1375666"
+        assert enriched[0]["imdb_title"] == "Inception"
+        assert enriched[0]["imdb_rating"] == 8.8
+        assert enriched[0]["imdb_poster_url"] == "https://example.com/poster.jpg"
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_candidates(self, mock_config: Any) -> None:
+        state: dict[str, Any] = {"rag_candidates": []}
+
+        with patch("chain.nodes.imdb_enrichment.get_config", return_value=mock_config):
+            result = await imdb_enrichment_node(state)  # type: ignore[arg-type]
+
+        assert result["enriched_movies"] == []
+
+    @pytest.mark.asyncio
+    async def test_handles_imdb_search_failure_gracefully(
+        self, mock_config: Any, sample_rag_candidates: list[dict[str, Any]]
+    ) -> None:
+        """A failed IMDB search for one candidate does not crash the whole node."""
+        state = {"rag_candidates": sample_rag_candidates[:1]}
+
+        mock_client = AsyncMock()
+        mock_client.search.titles = AsyncMock(side_effect=Exception("IMDB timeout"))
+
+        with (
+            patch("chain.nodes.imdb_enrichment.get_config", return_value=mock_config),
+            patch("chain.nodes.imdb_enrichment.IMDBAPIClient") as mock_client_cls,
+        ):
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await imdb_enrichment_node(state)  # type: ignore[arg-type]
+
+        # Should return the candidate with imdb_id=None, not crash
+        enriched = result["enriched_movies"]
+        assert len(enriched) == 1
+        assert enriched[0]["imdb_id"] is None
+        assert enriched[0]["confidence"] == 0.0
+
+
+class TestComputeConfidence:
+    def _make_hit(self, title: str, year: int | None) -> MagicMock:
+        hit = MagicMock()
+        hit.primary_title = title
+        hit.start_year = year
+        return hit
+
+    def test_exact_title_and_year_max_confidence(self) -> None:
+        candidate = {"title": "Inception", "release_year": 2010}
+        hit = self._make_hit("Inception", 2010)
+        score = _compute_confidence(candidate, hit)
+        assert score == 1.0
+
+    def test_year_off_by_two_still_reasonable(self) -> None:
+        candidate = {"title": "Inception", "release_year": 2010}
+        hit = self._make_hit("Inception", 2012)
+        score = _compute_confidence(candidate, hit)
+        assert 0.4 < score < 1.0
+
+    def test_completely_different_title_and_year_low_confidence(self) -> None:
+        candidate = {"title": "Inception", "release_year": 2010}
+        hit = self._make_hit("Titanic", 1997)
+        score = _compute_confidence(candidate, hit)
+        assert score < 0.3
+
+    def test_no_year_uses_title_only(self) -> None:
+        candidate = {"title": "Inception", "release_year": 0}
+        hit = self._make_hit("Inception", None)
+        score = _compute_confidence(candidate, hit)
+        assert score == 0.5  # only title match contributes
+
+
+# ===========================================================================
+# validation_node
+# ===========================================================================
+
+
+class TestValidationNode:
+    def test_sorts_by_confidence_descending(
+        self, mock_config: Any, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        # Shuffle: put lower confidence first
+        shuffled = list(reversed(sample_enriched_movies))
+        state = {"enriched_movies": shuffled}
+
+        with patch("chain.nodes.validation.get_config", return_value=mock_config):
+            result = validation_node(state)  # type: ignore[arg-type]
+
+        movies = result["enriched_movies"]
+        confidences = [m["confidence"] for m in movies]
+        assert confidences == sorted(confidences, reverse=True)
+
+    def test_deduplicates_by_imdb_id(
+        self, mock_config: Any, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        # Add a duplicate of the first movie
+        duplicate = dict(sample_enriched_movies[0])
+        duplicate["confidence"] = 0.50  # lower than original 0.95
+        state = {"enriched_movies": sample_enriched_movies + [duplicate]}
+
+        with patch("chain.nodes.validation.get_config", return_value=mock_config):
+            result = validation_node(state)  # type: ignore[arg-type]
+
+        imdb_ids = [m["imdb_id"] for m in result["enriched_movies"]]
+        assert len(imdb_ids) == len(set(imdb_ids)), "Duplicate IMDb IDs found"
+
+    def test_caps_at_five_results(self, mock_config: Any) -> None:
+        movies = [
+            {"imdb_id": f"tt000000{i}", "confidence": 0.9 - i * 0.05, "rag_title": f"Movie {i}"}
+            for i in range(8)
+        ]
+        state = {"enriched_movies": movies}
+
+        with patch("chain.nodes.validation.get_config", return_value=mock_config):
+            result = validation_node(state)  # type: ignore[arg-type]
+
+        assert len(result["enriched_movies"]) <= 5
+
+    def test_filters_below_confidence_threshold(self, mock_config: Any) -> None:
+        movies = [
+            {"imdb_id": "tt0000001", "confidence": 0.9, "rag_title": "Good Match"},
+            {"imdb_id": "tt0000002", "confidence": 0.1, "rag_title": "Bad Match"},
+        ]
+        state = {"enriched_movies": movies}
+
+        with patch("chain.nodes.validation.get_config", return_value=mock_config):
+            result = validation_node(state)  # type: ignore[arg-type]
+
+        # Default threshold is 0.3; 0.1 should be excluded
+        assert all(m["confidence"] >= 0.3 for m in result["enriched_movies"])
+
+    def test_falls_back_to_all_when_none_pass_threshold(self, mock_config: Any) -> None:
+        """When everything is below threshold, returns all (sorted) so user sees something."""
+        movies = [
+            {"imdb_id": "tt0000001", "confidence": 0.1, "rag_title": "Weak A"},
+            {"imdb_id": "tt0000002", "confidence": 0.15, "rag_title": "Weak B"},
+        ]
+        state = {"enriched_movies": movies}
+
+        with patch("chain.nodes.validation.get_config", return_value=mock_config):
+            result = validation_node(state)  # type: ignore[arg-type]
+
+        # Fallback: both returned
+        assert len(result["enriched_movies"]) == 2
+
+
+# ===========================================================================
+# presentation_node
+# ===========================================================================
+
+
+class TestPresentationNode:
+    def test_returns_ai_message_with_movie_list(
+        self, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        state = {"enriched_movies": sample_enriched_movies, "refinement_count": 0}
+        result = presentation_node(state)  # type: ignore[arg-type]
+
+        assert "messages" in result
+        assert isinstance(result["messages"][0], AIMessage)
+        assert "Inception" in result["messages"][0].content
+
+    def test_sets_phase_to_confirmation(self, sample_enriched_movies: list[dict[str, Any]]) -> None:
+        state = {"enriched_movies": sample_enriched_movies, "refinement_count": 0}
+        result = presentation_node(state)  # type: ignore[arg-type]
+        assert result["phase"] == "confirmation"
+
+    def test_includes_all_candidate_titles(
+        self, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        state = {"enriched_movies": sample_enriched_movies, "refinement_count": 0}
+        result = presentation_node(state)  # type: ignore[arg-type]
+        content = result["messages"][0].content
+        for movie in sample_enriched_movies:
+            assert movie["imdb_title"] in content
+
+    def test_empty_candidates_produces_fallback_message(self) -> None:
+        state = {"enriched_movies": [], "refinement_count": 0}
+        result = presentation_node(state)  # type: ignore[arg-type]
+        assert "couldn't find" in result["messages"][0].content.lower()
+        assert result["phase"] == "confirmation"
+
+    def test_refinement_attempt_number_shown_in_header(
+        self, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        state = {"enriched_movies": sample_enriched_movies, "refinement_count": 2}
+        result = presentation_node(state)  # type: ignore[arg-type]
+        assert (
+            "attempt" in result["messages"][0].content.lower()
+            or "refined" in result["messages"][0].content.lower()
+        )
+
+
+# ===========================================================================
+# confirmation_node
+# ===========================================================================
+
+
+class TestConfirmationNode:
+    def _make_llm_mock(self, classification: ConfirmationClassification) -> MagicMock:
+        """Build a mock LLM chain: ChatAnthropic().with_structured_output().ainvoke()."""
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke = AsyncMock(return_value=classification)
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = mock_chain
+        return mock_llm
+
+    @pytest.mark.asyncio
+    async def test_confirmed_sets_confirmed_movie_fields(
+        self,
+        mock_config: Any,
+        sample_enriched_movies: list[dict[str, Any]],
+        confirmed_classification: ConfirmationClassification,
+    ) -> None:
+        state = {
+            "messages": [HumanMessage("It's number 1!")],
+            "enriched_movies": sample_enriched_movies,
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.confirmation.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.confirmation.ChatAnthropic",
+                return_value=self._make_llm_mock(confirmed_classification),
+            ),
+        ):
+            result = await confirmation_node(state)  # type: ignore[arg-type]
+
+        assert result["next_action"] == "confirmed"
+        assert result["confirmed_movie_id"] == sample_enriched_movies[0]["imdb_id"]
+        assert result["confirmed_movie_title"] == sample_enriched_movies[0]["imdb_title"]
+        assert result["confirmed_movie_data"] == sample_enriched_movies[0]
+
+    @pytest.mark.asyncio
+    async def test_not_found_sets_refine_action(
+        self,
+        mock_config: Any,
+        sample_enriched_movies: list[dict[str, Any]],
+        not_found_classification: ConfirmationClassification,
+    ) -> None:
+        state = {
+            "messages": [HumanMessage("None of these match.")],
+            "enriched_movies": sample_enriched_movies,
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.confirmation.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.confirmation.ChatAnthropic",
+                return_value=self._make_llm_mock(not_found_classification),
+            ),
+        ):
+            result = await confirmation_node(state)  # type: ignore[arg-type]
+
+        assert result["next_action"] == "refine"
+
+    @pytest.mark.asyncio
+    async def test_not_found_exhausted_when_max_refinements_reached(
+        self,
+        mock_config: Any,
+        sample_enriched_movies: list[dict[str, Any]],
+        not_found_classification: ConfirmationClassification,
+    ) -> None:
+        state = {
+            "messages": [HumanMessage("Still not right.")],
+            "enriched_movies": sample_enriched_movies,
+            "refinement_count": 3,  # at the limit
+        }
+
+        with (
+            patch("chain.nodes.confirmation.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.confirmation.ChatAnthropic",
+                return_value=self._make_llm_mock(not_found_classification),
+            ),
+        ):
+            result = await confirmation_node(state)  # type: ignore[arg-type]
+
+        assert result["next_action"] == "exhausted"
+
+    @pytest.mark.asyncio
+    async def test_unclear_response_sets_wait_and_adds_clarification(
+        self, mock_config: Any, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        unclear = ConfirmationClassification(decision="unclear", reasoning="ambiguous")
+        state = {
+            "messages": [HumanMessage("hmm maybe?")],
+            "enriched_movies": sample_enriched_movies,
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.confirmation.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.confirmation.ChatAnthropic", return_value=self._make_llm_mock(unclear)
+            ),
+        ):
+            result = await confirmation_node(state)  # type: ignore[arg-type]
+
+        assert result["next_action"] == "wait"
+        assert any(isinstance(m, AIMessage) for m in result.get("messages", []))
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_falls_back_to_wait(
+        self, mock_config: Any, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        """LLM exception → graceful wait, no crash."""
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke = AsyncMock(side_effect=Exception("LLM unavailable"))
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = mock_chain
+
+        state = {
+            "messages": [HumanMessage("The second one!")],
+            "enriched_movies": sample_enriched_movies,
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.confirmation.get_config", return_value=mock_config),
+            patch("chain.nodes.confirmation.ChatAnthropic", return_value=mock_llm),
+        ):
+            result = await confirmation_node(state)  # type: ignore[arg-type]
+
+        assert result["next_action"] == "wait"
+
+    @pytest.mark.asyncio
+    async def test_no_human_message_returns_wait(
+        self, mock_config: Any, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
+        state = {
+            "messages": [AIMessage("Here are the candidates…")],
+            "enriched_movies": sample_enriched_movies,
+            "refinement_count": 0,
+        }
+
+        with patch("chain.nodes.confirmation.get_config", return_value=mock_config):
+            result = await confirmation_node(state)  # type: ignore[arg-type]
+
+        assert result["next_action"] == "wait"
+
+
+# ===========================================================================
+# refinement_node
+# ===========================================================================
+
+
+class TestRefinementNode:
+    def _make_llm_mock(self, plan: RefinementPlan) -> MagicMock:
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke = AsyncMock(return_value=plan)
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = mock_chain
+        return mock_llm
+
+    @pytest.mark.asyncio
+    async def test_updates_user_plot_query(
+        self, mock_config: Any, refinement_plan: RefinementPlan
+    ) -> None:
+        state = {
+            "messages": [
+                HumanMessage("A heist movie where they steal dreams"),
+                AIMessage("Here are candidates..."),
+                HumanMessage("None of these, it was set in space"),
+            ],
+            "user_plot_query": "A heist movie where they steal dreams",
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.refinement.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.refinement.ChatAnthropic",
+                return_value=self._make_llm_mock(refinement_plan),
+            ),
+        ):
+            result = await refinement_node(state)  # type: ignore[arg-type]
+
+        assert result["user_plot_query"] == refinement_plan.refined_query
+        assert result["refinement_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_increments_refinement_count(
+        self, mock_config: Any, refinement_plan: RefinementPlan
+    ) -> None:
+        state = {
+            "messages": [HumanMessage("not right")],
+            "user_plot_query": "query",
+            "refinement_count": 1,
+        }
+
+        with (
+            patch("chain.nodes.refinement.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.refinement.ChatAnthropic",
+                return_value=self._make_llm_mock(refinement_plan),
+            ),
+        ):
+            result = await refinement_node(state)  # type: ignore[arg-type]
+
+        assert result["refinement_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_adds_ai_message_to_state(
+        self, mock_config: Any, refinement_plan: RefinementPlan
+    ) -> None:
+        state = {
+            "messages": [HumanMessage("no match")],
+            "user_plot_query": "original query",
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.refinement.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.refinement.ChatAnthropic",
+                return_value=self._make_llm_mock(refinement_plan),
+            ),
+        ):
+            result = await refinement_node(state)  # type: ignore[arg-type]
+
+        assert any(isinstance(m, AIMessage) for m in result.get("messages", []))
+        ai_content = next(m.content for m in result["messages"] if isinstance(m, AIMessage))
+        assert ai_content == refinement_plan.message_to_user
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_uses_original_query(self, mock_config: Any) -> None:
+        """LLM error falls back to the original query so the loop can continue."""
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke = AsyncMock(side_effect=Exception("API error"))
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = mock_chain
+
+        state = {
+            "messages": [HumanMessage("no match")],
+            "user_plot_query": "my original query",
+            "refinement_count": 0,
+        }
+
+        with (
+            patch("chain.nodes.refinement.get_config", return_value=mock_config),
+            patch("chain.nodes.refinement.ChatAnthropic", return_value=mock_llm),
+        ):
+            result = await refinement_node(state)  # type: ignore[arg-type]
+
+        assert result["user_plot_query"] == "my original query"
+        assert result["refinement_count"] == 1
+
+
+# ===========================================================================
+# dead_end_node
+# ===========================================================================
+
+
+class TestDeadEndNode:
+    def test_adds_ai_message(self, mock_config: Any) -> None:
+        state = {"user_plot_query": "a movie about robots", "refinement_count": 3}
+
+        with patch("chain.nodes.dead_end.get_config", return_value=mock_config):
+            result = dead_end_node(state)  # type: ignore[arg-type]
+
+        assert isinstance(result["messages"][0], AIMessage)
+
+    def test_resets_phase_to_discovery(self, mock_config: Any) -> None:
+        state = {"user_plot_query": "robots", "refinement_count": 3}
+
+        with patch("chain.nodes.dead_end.get_config", return_value=mock_config):
+            result = dead_end_node(state)  # type: ignore[arg-type]
+
+        assert result["phase"] == "discovery"
+        assert result["refinement_count"] == 0
+
+    def test_message_mentions_database_limitation(self, mock_config: Any) -> None:
+        state = {"user_plot_query": "robots"}
+
+        with patch("chain.nodes.dead_end.get_config", return_value=mock_config):
+            result = dead_end_node(state)  # type: ignore[arg-type]
+
+        content = result["messages"][0].content.lower()
+        assert "database" in content or "dataset" in content
+
+
+# ===========================================================================
+# qa_agent_node
+# ===========================================================================
+
+
+class TestQaAgentNode:
+    @pytest.mark.asyncio
+    async def test_adds_new_messages_to_state(
+        self, mock_config: Any, sample_confirmed_movie: dict[str, Any]
+    ) -> None:
+        """Agent response is appended as new messages."""
+        ai_response = AIMessage(content="Inception is rated PG-13.")
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(
+            return_value={"messages": [HumanMessage("Is it for kids?"), ai_response]}
+        )
+
+        state = {
+            "messages": [HumanMessage("Is it for kids?")],
+            "confirmed_movie_data": sample_confirmed_movie,
+        }
+
+        with (
+            patch("chain.nodes.qa_agent.get_config", return_value=mock_config),
+            patch("chain.nodes.qa_agent.IMDBAPIClient") as mock_client_cls,
+            patch("chain.nodes.qa_agent.create_react_agent", return_value=mock_agent),
+        ):
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await qa_agent_node(state)  # type: ignore[arg-type]
+
+        # Should have added only the new messages (everything beyond the input)
+        assert any(isinstance(m, AIMessage) for m in result["messages"])
+        assert result["phase"] == "qa"
+
+    @pytest.mark.asyncio
+    async def test_phase_stays_qa(
+        self, mock_config: Any, sample_confirmed_movie: dict[str, Any]
+    ) -> None:
+        state = {
+            "messages": [HumanMessage("Who are the actors?")],
+            "confirmed_movie_data": sample_confirmed_movie,
+        }
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(
+            return_value={
+                "messages": [HumanMessage("Who are the actors?"), AIMessage("Stars include…")]
+            }
+        )
+
+        with (
+            patch("chain.nodes.qa_agent.get_config", return_value=mock_config),
+            patch("chain.nodes.qa_agent.IMDBAPIClient") as mock_client_cls,
+            patch("chain.nodes.qa_agent.create_react_agent", return_value=mock_agent),
+        ):
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await qa_agent_node(state)  # type: ignore[arg-type]
+
+        assert result["phase"] == "qa"
+
+
+class TestBuildSystemPrompt:
+    def test_includes_imdb_id_in_prompt(self, sample_confirmed_movie: dict[str, Any]) -> None:
+        prompt = _build_system_prompt(sample_confirmed_movie)
+        assert "tt1375666" in prompt
+
+    def test_includes_movie_title(self, sample_confirmed_movie: dict[str, Any]) -> None:
+        prompt = _build_system_prompt(sample_confirmed_movie)
+        assert "Inception" in prompt
+
+    def test_handles_empty_confirmed_dict(self) -> None:
+        """Should not raise even with empty confirmed data."""
+        prompt = _build_system_prompt({})
+        assert isinstance(prompt, str)
+        assert len(prompt) > 0

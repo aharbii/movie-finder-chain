@@ -1,0 +1,65 @@
+# Movie Finder Chain — Development Docker Compose
+#
+# Services:
+#   qdrant   — local Qdrant instance for development / integration tests
+#   chain    — chain package (import-check + test runner)
+#
+# Usage:
+#   docker compose up                       # start qdrant + smoke-test chain
+#   docker compose run chain pytest tests/  # run the test suite
+#   docker compose run chain uv run python examples/basic_usage.py
+#
+# Environment variables are loaded from the project-root .env file.
+# Copy .env.example → .env and fill in API keys before running.
+
+services:
+
+  # ------------------------------------------------------------------
+  # Qdrant — vector store (development / CI only)
+  # Production uses Qdrant Cloud; this service is for local development.
+  # ------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.13.0
+    container_name: movie-finder-qdrant-dev
+    ports:
+      - "6333:6333"
+      - "6334:6334"   # gRPC port
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Chain — library smoke-test / test runner
+  # ------------------------------------------------------------------
+  chain:
+    build:
+      context: ..        # backend/ — needs access to both imdbapi/ and chain/
+      dockerfile: chain/Dockerfile
+    container_name: movie-finder-chain
+    env_file:
+      - .env             # chain-local .env (copy from .env.example)
+    environment:
+      # Override Qdrant endpoint to use the local container in dev
+      QDRANT_ENDPOINT: "http://qdrant:6333"
+      QDRANT_API_KEY: ""   # no key needed for local Qdrant
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    volumes:
+      # Mount source for live-reload during development
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    restart: "no"
+
+
+volumes:
+  qdrant_data:
+    name: movie-finder-qdrant-data
