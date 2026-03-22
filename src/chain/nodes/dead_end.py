@@ -6,13 +6,15 @@ Informs the user and suggests concrete ways to improve their search.
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.messages import AIMessage
 
 from chain.config import get_config
 from chain.state import MovieFinderState
 
 
-def dead_end_node(state: MovieFinderState) -> dict:
+def dead_end_node(state: MovieFinderState) -> dict[str, Any]:
     """Return a graceful dead-end message to the user."""
     cfg = get_config()
 

@@ -56,12 +56,13 @@ LangChain/LangGraph picks these up automatically on import.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
     from langgraph.graph.graph import CompiledGraph
 
 from chain.nodes.confirmation import confirmation_node
@@ -110,7 +111,7 @@ def _route_after_confirmation(
 # ---------------------------------------------------------------------------
 
 
-def compile_graph(checkpointer: object | None = None) -> CompiledGraph:
+def compile_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledGraph:
     """Build and compile the Movie Finder LangGraph graph.
 
     Parameters

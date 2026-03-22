@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage
-from langgraph.types import RunnableConfig
+from langchain_core.runnables import RunnableConfig
 
 from chain.config import get_config
 from chain.rag.service import MovieSearchService
@@ -20,7 +21,7 @@ from chain.state import MovieFinderState
 logger = logging.getLogger(__name__)
 
 
-async def rag_search_node(state: MovieFinderState, config: RunnableConfig) -> dict:
+async def rag_search_node(state: MovieFinderState, config: RunnableConfig) -> dict[str, Any]:
     """Embed the current plot query and fetch candidates from Qdrant."""
     cfg = get_config()
 

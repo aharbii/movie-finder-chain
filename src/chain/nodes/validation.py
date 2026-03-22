@@ -8,6 +8,7 @@ candidate pool presented to the user.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from chain.config import get_config
 from chain.state import MovieFinderState
@@ -15,10 +16,10 @@ from chain.state import MovieFinderState
 logger = logging.getLogger(__name__)
 
 
-def validation_node(state: MovieFinderState) -> dict:
+def validation_node(state: MovieFinderState) -> dict[str, Any]:
     """Filter, deduplicate, and rank the enriched movie list."""
     cfg = get_config()
-    enriched: list[dict] = state.get("enriched_movies", [])
+    enriched: list[dict[str, Any]] = state.get("enriched_movies", [])
 
     # Keep candidates that have an IMDb match above the confidence threshold.
     # Also include candidates without any IMDb match (confidence==0) if there
@@ -29,7 +30,7 @@ def validation_node(state: MovieFinderState) -> dict:
 
     # Deduplicate by IMDb ID (keep highest confidence per ID)
     seen_ids: set[str] = set()
-    deduped: list[dict] = []
+    deduped: list[dict[str, Any]] = []
     for movie in sorted(validated, key=lambda m: m["confidence"], reverse=True):
         imdb_id = movie.get("imdb_id")
         if imdb_id not in seen_ids:

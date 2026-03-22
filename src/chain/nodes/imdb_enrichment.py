@@ -20,8 +20,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from difflib import SequenceMatcher
+from typing import Any
 
-from imdbapi import IMDBAPIClient  # type: ignore[attr-defined]
+from imdbapi import IMDBAPIClient
 from imdbapi.exceptions import IMDBAPIRateLimitError
 from imdbapi.models.title import BatchGetTitlesResponse
 
@@ -41,10 +42,10 @@ _RETRY_BASE_DELAY = 30.0
 _RETRY_MAX_ATTEMPTS = 4
 
 
-async def imdb_enrichment_node(state: MovieFinderState) -> dict:
+async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
     """Enrich every RAG candidate with live IMDb metadata."""
     cfg = get_config()
-    candidates: list[dict] = state.get("rag_candidates", [])
+    candidates: list[dict[str, Any]] = state.get("rag_candidates", [])
 
     if not candidates:
         logger.warning("imdb_enrichment_node: no RAG candidates to enrich")
@@ -62,11 +63,13 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict:
             )
             for i, c in enumerate(candidates)
         ]
-        best_matches: list[tuple[dict, str | None, float]] = await asyncio.gather(*search_tasks)
+        best_matches: list[tuple[dict[str, Any], str | None, float]] = await asyncio.gather(
+            *search_tasks
+        )
         # best_matches[i] = (candidate, imdb_id | None, confidence)
 
         # Step 2: batch-fetch full title details for confident matches
-        id_to_full: dict[str, dict] = {}
+        id_to_full: dict[str, dict[str, Any]] = {}
         confident_ids = [
             imdb_id
             for _, imdb_id, conf in best_matches
@@ -83,7 +86,7 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict:
                 logger.warning("batch_get failed for %s: %s", batch, exc)
 
     # Step 3: merge RAG + IMDb data into enriched records
-    enriched: list[dict] = []
+    enriched: list[dict[str, Any]] = []
     for candidate, imdb_id, confidence in best_matches:
         imdb_data = id_to_full.get(imdb_id, {}) if imdb_id else {}
         enriched.append(
@@ -148,11 +151,11 @@ async def _batch_get_with_retry(client: IMDBAPIClient, ids: list[str]) -> BatchG
 
 async def _search_best_match(
     client: IMDBAPIClient,
-    candidate: dict,
+    candidate: dict[str, Any],
     search_limit: int,
     semaphore: asyncio.Semaphore,
     initial_delay: float = 0.0,
-) -> tuple[dict, str | None, float]:
+) -> tuple[dict[str, Any], str | None, float]:
     """Search IMDb for a title matching *candidate* and return the best hit."""
     title = candidate.get("title", "")
     year = candidate.get("release_year", 0)
@@ -196,7 +199,7 @@ async def _search_best_match(
     return candidate, best_id, best_score
 
 
-def _compute_confidence(candidate: dict, imdb_hit: object) -> float:
+def _compute_confidence(candidate: dict[str, Any], imdb_hit: object) -> float:
     """Score how well an IMDb search hit matches a RAG candidate (0–1)."""
     score = 0.0
 
@@ -228,7 +231,7 @@ def _compute_confidence(candidate: dict, imdb_hit: object) -> float:
     return min(score, 1.0)
 
 
-def _title_to_dict(title: object) -> dict:
+def _title_to_dict(title: object) -> dict[str, Any]:
     """Convert a Title model to a plain dict for state storage."""
     directors = [d.display_name for d in (getattr(title, "directors", []) or [])]
     stars = [s.display_name for s in (getattr(title, "stars", []) or [])]

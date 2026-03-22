@@ -8,6 +8,7 @@ branch.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from langchain_core.messages import AIMessage
 
@@ -16,9 +17,9 @@ from chain.state import MovieFinderState
 logger = logging.getLogger(__name__)
 
 
-def presentation_node(state: MovieFinderState) -> dict:
+def presentation_node(state: MovieFinderState) -> dict[str, Any]:
     """Format enriched movies into a structured AI message for the user."""
-    movies: list[dict] = state.get("enriched_movies", [])
+    movies: list[dict[str, Any]] = state.get("enriched_movies", [])
     refinement_count: int = state.get("refinement_count", 0)
 
     if not movies:

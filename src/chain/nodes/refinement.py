@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import importlib.resources
 import logging
-from typing import cast
+from typing import Any, cast
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from pydantic import SecretStr
 
 from chain.config import get_config
 from chain.models.output import RefinementPlan
@@ -26,7 +27,7 @@ from chain.state import MovieFinderState
 logger = logging.getLogger(__name__)
 
 
-async def refinement_node(state: MovieFinderState) -> dict:
+async def refinement_node(state: MovieFinderState) -> dict[str, Any]:
     """Build a richer query from conversation history and update the state."""
     cfg = get_config()
     messages: list[BaseMessage] = state.get("messages", [])
@@ -41,8 +42,8 @@ async def refinement_node(state: MovieFinderState) -> dict:
     )
 
     llm = ChatAnthropic(
-        model=cfg.reasoning_model,
-        api_key=cfg.anthropic_api_key,
+        model_name=cfg.reasoning_model,
+        api_key=SecretStr(cfg.anthropic_api_key),
     ).with_structured_output(RefinementPlan)
 
     try:

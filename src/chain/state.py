@@ -19,7 +19,7 @@ next_action (set by confirmation_node, read by the confirmation router)
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -49,16 +49,16 @@ class MovieFinderState(TypedDict, total=False):
     # RAG discovery
     # ------------------------------------------------------------------ #
     user_plot_query: str  # current plot description used for RAG
-    rag_candidates: list[dict]  # raw Movie dicts from Qdrant
+    rag_candidates: list[dict[str, Any]]  # raw Movie dicts from Qdrant
 
     # ------------------------------------------------------------------ #
     # IMDB enrichment + validation
     # ------------------------------------------------------------------ #
-    enriched_movies: list[dict]  # RAG + IMDB merged, sorted by confidence
+    enriched_movies: list[dict[str, Any]]  # RAG + IMDB merged, sorted by confidence
 
     # ------------------------------------------------------------------ #
     # Confirmed movie (set after user confirms)
     # ------------------------------------------------------------------ #
     confirmed_movie_id: str | None  # IMDb title ID, e.g. "tt1375666"
     confirmed_movie_title: str | None  # Human-readable title
-    confirmed_movie_data: dict | None  # Full enriched record for Q&A context
+    confirmed_movie_data: dict[str, Any] | None  # Full enriched record for Q&A context

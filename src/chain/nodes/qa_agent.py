@@ -17,13 +17,15 @@ from __future__ import annotations
 
 import importlib.resources
 import logging
+from typing import Any
 
-from imdbapi import IMDBAPIClient  # type: ignore[attr-defined]
+from imdbapi import IMDBAPIClient
 from imdbapi.langchain.agent import MOVIE_AGENT_SYSTEM_PROMPT
 from imdbapi.langchain.tools import create_imdb_tools
 from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import BaseMessage, HumanMessage
+from pydantic import SecretStr
 
 from chain.config import get_config
 from chain.state import MovieFinderState
@@ -31,17 +33,17 @@ from chain.state import MovieFinderState
 logger = logging.getLogger(__name__)
 
 
-async def qa_agent_node(state: MovieFinderState) -> dict:
+async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
     """Run the IMDb ReAct agent on the current conversation messages."""
     cfg = get_config()
-    confirmed: dict = state.get("confirmed_movie_data") or {}
+    confirmed: dict[str, Any] = state.get("confirmed_movie_data") or {}
     messages: list[BaseMessage] = state.get("messages", [])
 
     system_prompt = _build_system_prompt(confirmed)
 
     llm = ChatAnthropic(
-        model=cfg.reasoning_model,
-        api_key=cfg.anthropic_api_key,
+        model_name=cfg.reasoning_model,
+        api_key=SecretStr(cfg.anthropic_api_key),
     )
 
     # Anthropic requires the conversation to end with a HumanMessage.
@@ -57,10 +59,7 @@ async def qa_agent_node(state: MovieFinderState) -> dict:
         # No checkpointer here — state is managed by the outer graph
         agent = create_agent(llm, tools, system_prompt=system_prompt)
 
-        result = await agent.ainvoke(
-            {"messages": messages_for_agent},
-            config={"configurable": {}},
-        )
+        result = await agent.ainvoke({"messages": messages_for_agent})
 
     # Extract only the messages that the agent added (everything beyond input)
     new_messages: list[BaseMessage] = result["messages"][len(messages_for_agent) :]
@@ -83,7 +82,7 @@ async def qa_agent_node(state: MovieFinderState) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _build_system_prompt(confirmed: dict) -> str:
+def _build_system_prompt(confirmed: dict[str, Any]) -> str:
     """Combine the base IMDb agent prompt with confirmed-movie context."""
     imdb_id = confirmed.get("imdb_id", "unknown")
     imdb_title = confirmed.get("imdb_title") or confirmed.get("rag_title", "Unknown")

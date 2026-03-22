@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import importlib.resources
 import logging
-from typing import cast
+from typing import Any, cast
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from pydantic import SecretStr
 
 from chain.config import get_config
 from chain.models.output import ConfirmationClassification
@@ -30,11 +31,11 @@ logger = logging.getLogger(__name__)
 _PROMPT_PATH = importlib.resources.files("chain") / "../../prompts/confirmation.md"
 
 
-async def confirmation_node(state: MovieFinderState) -> dict:
+async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
     """Classify the user's confirmation response and route accordingly."""
     cfg = get_config()
     messages: list[BaseMessage] = state.get("messages", [])
-    movies: list[dict] = state.get("enriched_movies", [])
+    movies: list[dict[str, Any]] = state.get("enriched_movies", [])
     refinement_count: int = state.get("refinement_count", 0)
 
     user_message = _last_human_text(messages)
@@ -51,8 +52,8 @@ async def confirmation_node(state: MovieFinderState) -> dict:
     )
 
     llm = ChatAnthropic(
-        model=cfg.classifier_model,
-        api_key=cfg.anthropic_api_key,
+        model_name=cfg.classifier_model,
+        api_key=SecretStr(cfg.anthropic_api_key),
     ).with_structured_output(ConfirmationClassification)
 
     try:
@@ -125,7 +126,7 @@ def _last_human_text(messages: list[BaseMessage]) -> str:
     return ""
 
 
-def _format_candidates(movies: list[dict]) -> str:
+def _format_candidates(movies: list[dict[str, Any]]) -> str:
     if not movies:
         return "(no candidates)"
     lines = []

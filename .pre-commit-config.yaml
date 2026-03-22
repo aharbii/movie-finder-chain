@@ -23,7 +23,6 @@ repos:
         additional_dependencies:
           - pydantic
           - pydantic-settings
-          - types-python-dotenv
         args:
           - --check-untyped-defs
           - --disallow-untyped-defs
