@@ -56,6 +56,7 @@ LangChain/LangGraph picks these up automatically on import.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any, Literal
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -107,6 +108,43 @@ def _route_after_confirmation(
 
 
 # ---------------------------------------------------------------------------
+# LangSmith observability helper
+# ---------------------------------------------------------------------------
+
+
+def _apply_langsmith_env() -> None:
+    """Propagate LangSmith config from ChainConfig into os.environ.
+
+    LangChain reads these env vars directly — pydantic-settings loading them
+    into the config object is not enough.  This ensures tracing works even
+    when the package is imported without a prior load_dotenv() call.
+
+    Only sets vars that are not already present in the environment (so an
+    explicit shell export always takes precedence).
+    """
+    from chain.config import get_config  # local import to avoid circular dependency
+
+    cfg = get_config()
+    if not cfg.langsmith_tracing:
+        return
+
+    vars_to_set = {
+        "LANGCHAIN_TRACING_V2": "true",
+        "LANGSMITH_TRACING": "true",
+        "LANGCHAIN_ENDPOINT": cfg.langsmith_endpoint,
+        "LANGSMITH_ENDPOINT": cfg.langsmith_endpoint,
+        "LANGCHAIN_PROJECT": cfg.langsmith_project,
+        "LANGSMITH_PROJECT": cfg.langsmith_project,
+    }
+    if cfg.langsmith_api_key:
+        vars_to_set["LANGCHAIN_API_KEY"] = cfg.langsmith_api_key
+        vars_to_set["LANGSMITH_API_KEY"] = cfg.langsmith_api_key
+
+    for key, value in vars_to_set.items():
+        os.environ.setdefault(key, value)
+
+
+# ---------------------------------------------------------------------------
 # Graph factory
 # ---------------------------------------------------------------------------
 
@@ -153,6 +191,8 @@ def compile_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> Compi
     """
     if checkpointer is None:
         checkpointer = MemorySaver()
+
+    _apply_langsmith_env()
 
     builder = StateGraph(MovieFinderState)
 

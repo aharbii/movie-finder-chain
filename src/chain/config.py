@@ -67,10 +67,10 @@ class ChainConfig(BaseSettings):
     )
 
     # --- LangSmith observability ---
-    langchain_tracing_v2: bool = Field(default=False)
-    langchain_endpoint: str = Field(default="https://api.smith.langchain.com")
-    langchain_api_key: str = Field(default="")
-    langchain_project: str = Field(default="movie-finder")
+    langsmith_tracing: bool = Field(default=False)
+    langsmith_endpoint: str = Field(default="https://api.smith.langchain.com")
+    langsmith_api_key: str = Field(default="")
+    langsmith_project: str = Field(default="movie-finder")
 
     @field_validator("qdrant_endpoint")
     @classmethod
