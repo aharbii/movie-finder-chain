@@ -19,6 +19,7 @@ class RagCandidate(BaseModel):
     genre: list[str] = Field(default_factory=list)
     cast: list[str] = Field(default_factory=list)
     plot: str = ""
+    rag_score: float = 0.0  # Qdrant cosine similarity (0–1)
 
 
 class EnrichedMovie(BaseModel):

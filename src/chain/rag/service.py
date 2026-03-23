@@ -102,6 +102,7 @@ class MovieSearchService:
                     genre=genre,
                     cast=cast,
                     plot=payload.get("plot", ""),
+                    rag_score=float(point.score),
                 )
             )
 

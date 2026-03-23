@@ -197,35 +197,48 @@ async def _search_best_match(
 
 
 def _compute_confidence(candidate: dict[str, Any], imdb_hit: object) -> float:
-    """Score how well an IMDb search hit matches a RAG candidate (0–1)."""
-    score = 0.0
+    """Score how well an IMDb search hit matches a RAG candidate (0–1).
 
-    # --- Year proximity (up to 0.5) ---
+    Blends two signals:
+    - ``rag_score``: Qdrant cosine similarity — how semantically relevant this
+      movie is to the user's plot description (query-level relevance).
+    - ``imdb_match``: title + year proximity — how confidently we matched the
+      RAG candidate to the correct IMDb record (record-level correctness).
+
+    Weight: 40% vector relevance + 60% IMDb match.  This ensures candidates
+    with identical IMDb record quality (e.g. exact title+year) are still
+    differentiated by their semantic distance to the user's query.
+    """
+    # --- IMDb match score: title similarity + year proximity (0–1) ---
+    imdb_match = 0.0
+
     rag_year: int = candidate.get("release_year", 0) or 0
     imdb_year: int = getattr(imdb_hit, "start_year", None) or 0
     if rag_year and imdb_year:
         diff = abs(rag_year - imdb_year)
         if diff == 0:
-            score += 0.5
+            imdb_match += 0.5
         elif diff <= 2:
-            score += 0.35
+            imdb_match += 0.35
         elif diff <= 5:
-            score += 0.15
+            imdb_match += 0.15
 
-    # --- Title similarity (up to 0.5) ---
     rag_title = (candidate.get("title", "") or "").lower().strip()
     imdb_title = (getattr(imdb_hit, "primary_title", "") or "").lower().strip()
-
     if rag_title and imdb_title:
         if rag_title == imdb_title:
-            score += 0.5
+            imdb_match += 0.5
         elif rag_title in imdb_title or imdb_title in rag_title:
-            score += 0.35
+            imdb_match += 0.35
         else:
             ratio = SequenceMatcher(None, rag_title, imdb_title).ratio()
-            score += ratio * 0.3
+            imdb_match += ratio * 0.3
 
-    return min(score, 1.0)
+    # --- RAG vector similarity (Qdrant cosine score, already 0–1) ---
+    rag_score: float = float(candidate.get("rag_score") or 0.0)
+
+    # --- Weighted blend ---
+    return min(0.4 * rag_score + 0.6 * imdb_match, 1.0)
 
 
 def _title_to_dict(title: object) -> dict[str, Any]:

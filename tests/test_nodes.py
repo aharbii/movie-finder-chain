@@ -201,29 +201,48 @@ class TestComputeConfidence:
         hit.start_year = year
         return hit
 
-    def test_exact_title_and_year_max_confidence(self) -> None:
-        candidate = {"title": "Inception", "release_year": 2010}
+    def test_exact_title_and_year_high_confidence(self) -> None:
+        # rag_score=0 (no Qdrant score in unit test) + perfect IMDb match (1.0)
+        # → 0.4*0 + 0.6*1.0 = 0.6
+        candidate = {"title": "Inception", "release_year": 2010, "rag_score": 0.0}
         hit = self._make_hit("Inception", 2010)
         score = _compute_confidence(candidate, hit)
-        assert score == 1.0
+        assert score == pytest.approx(0.6)
+
+    def test_rag_score_blended_into_confidence(self) -> None:
+        # Exact title+year IMDb match (imdb_match=1.0) + high rag_score
+        # → 0.4*0.9 + 0.6*1.0 = 0.96
+        candidate = {"title": "Inception", "release_year": 2010, "rag_score": 0.9}
+        hit = self._make_hit("Inception", 2010)
+        score = _compute_confidence(candidate, hit)
+        assert score == pytest.approx(0.96)
+
+    def test_rag_score_differentiates_equal_imdb_matches(self) -> None:
+        # Two candidates with identical IMDb match but different rag_scores
+        high = {"title": "Inception", "release_year": 2010, "rag_score": 0.92}
+        low = {"title": "Inception", "release_year": 2010, "rag_score": 0.75}
+        hit = self._make_hit("Inception", 2010)
+        assert _compute_confidence(high, hit) > _compute_confidence(low, hit)
 
     def test_year_off_by_two_still_reasonable(self) -> None:
-        candidate = {"title": "Inception", "release_year": 2010}
+        candidate = {"title": "Inception", "release_year": 2010, "rag_score": 0.0}
         hit = self._make_hit("Inception", 2012)
         score = _compute_confidence(candidate, hit)
-        assert 0.4 < score < 1.0
+        assert 0.2 < score < 0.7
 
     def test_completely_different_title_and_year_low_confidence(self) -> None:
-        candidate = {"title": "Inception", "release_year": 2010}
+        candidate = {"title": "Inception", "release_year": 2010, "rag_score": 0.0}
         hit = self._make_hit("Titanic", 1997)
         score = _compute_confidence(candidate, hit)
-        assert score < 0.3
+        assert score < 0.2
 
     def test_no_year_uses_title_only(self) -> None:
-        candidate = {"title": "Inception", "release_year": 0}
+        # No year → only title contributes to imdb_match (0.5), rag_score=0
+        # → 0.4*0 + 0.6*0.5 = 0.3
+        candidate = {"title": "Inception", "release_year": 0, "rag_score": 0.0}
         hit = self._make_hit("Inception", None)
         score = _compute_confidence(candidate, hit)
-        assert score == 0.5  # only title match contributes
+        assert score == pytest.approx(0.3)
 
 
 # ===========================================================================
