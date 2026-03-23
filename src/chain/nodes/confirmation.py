@@ -15,7 +15,6 @@ Possible next_action values
 from __future__ import annotations
 
 import importlib.resources
-import logging
 from typing import Any, cast
 
 from langchain_anthropic import ChatAnthropic
@@ -25,8 +24,9 @@ from pydantic import SecretStr
 from chain.config import get_config
 from chain.models.output import ConfirmationClassification
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PROMPT_PATH = importlib.resources.files("chain") / "../../prompts/confirmation.md"
 
@@ -40,7 +40,10 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
 
     user_message = _last_human_text(messages)
     if not user_message:
+        logger.warning("Confirmation node: no human message found — staying on wait")
         return {"next_action": "wait"}
+
+    logger.debug(f"User reply: {user_message[:200]!r}")
 
     # Build candidates block for the prompt
     candidates_block = _format_candidates(movies)
@@ -62,33 +65,36 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
             await llm.ainvoke([HumanMessage(content=prompt_text)]),
         )
     except Exception as exc:
-        logger.error("Confirmation classifier failed: %s", exc)
+        logger.error(f"Confirmation classifier failed: {exc}")
         return {
             "messages": [AIMessage(content="I didn't quite catch that. Could you clarify?")],
             "next_action": "wait",
         }
 
     logger.info(
-        "Confirmation decision: %s (idx=%s) | reason: %s",
-        result.decision,
-        result.movie_index,
-        result.reasoning,
+        f"Confirmation decision: {result.decision} (idx={result.movie_index}) | reason: {result.reasoning}"
     )
 
     if result.decision == "confirmed" and result.movie_index is not None:
         idx = result.movie_index
         if 0 <= idx < len(movies):
             confirmed = movies[idx]
+            confirmed_title = confirmed.get("imdb_title") or confirmed.get("rag_title")
+            confirmed_year = confirmed.get("imdb_year") or confirmed.get("rag_year", "")
+            confirmed_id = confirmed.get("imdb_id", "—")
+            logger.info(
+                f"Movie confirmed: {confirmed_title} ({confirmed_year}) | imdb_id={confirmed_id}"
+            )
             return {
                 "confirmed_movie_id": confirmed.get("imdb_id"),
-                "confirmed_movie_title": confirmed.get("imdb_title") or confirmed.get("rag_title"),
+                "confirmed_movie_title": confirmed_title,
                 "confirmed_movie_data": confirmed,
                 "next_action": "confirmed",
                 "messages": [
                     AIMessage(
                         content=(
-                            f"Great! I've confirmed **{confirmed.get('imdb_title') or confirmed.get('rag_title')}**"
-                            f" ({confirmed.get('imdb_year') or confirmed.get('rag_year', '')}) as your movie. "
+                            f"Great! I've confirmed **{confirmed_title}**"
+                            f" ({confirmed_year}) as your movie. "
                             "You can now ask me anything about it!"
                         )
                     )
@@ -97,10 +103,17 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
 
     if result.decision == "not_found":
         if refinement_count >= cfg.max_refinements:
+            logger.info(
+                f"User says not found & max refinements ({cfg.max_refinements}) reached — routing to dead end"
+            )
             return {"next_action": "exhausted"}
+        logger.info(
+            f"User says not found — routing to refinement (attempt {refinement_count + 1}/{cfg.max_refinements})"
+        )
         return {"next_action": "refine"}
 
     # Unclear — ask for clarification
+    logger.debug("Decision unclear — asking user for clarification")
     return {
         "messages": [
             AIMessage(

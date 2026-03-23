@@ -16,7 +16,6 @@ processes the current message batch.
 from __future__ import annotations
 
 import importlib.resources
-import logging
 from typing import Any
 
 from imdbapi import IMDBAPIClient
@@ -24,13 +23,14 @@ from imdbapi.langchain.agent import MOVIE_AGENT_SYSTEM_PROMPT
 from imdbapi.langchain.tools import create_imdb_tools
 from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from pydantic import SecretStr
 
 from chain.config import get_config
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
@@ -38,6 +38,15 @@ async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
     cfg = get_config()
     confirmed: dict[str, Any] = state.get("confirmed_movie_data") or {}
     messages: list[BaseMessage] = state.get("messages", [])
+
+    confirmed_title: str = confirmed.get("imdb_title") or confirmed.get("rag_title") or "Unknown"
+    confirmed_id: str = confirmed.get("imdb_id") or "—"
+
+    # Log the user's question
+    user_question = next((m.content for m in reversed(messages) if isinstance(m, HumanMessage)), "")
+    logger.info(
+        f"Q&A | movie: {confirmed_title} ({confirmed_id}) | user: {str(user_question)[:200]!r}"
+    )
 
     system_prompt = _build_system_prompt(confirmed)
 
@@ -64,17 +73,43 @@ async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
     # Extract only the messages that the agent added (everything beyond input)
     new_messages: list[BaseMessage] = result["messages"][len(messages_for_agent) :]
 
-    logger.info(
-        "Q&A agent produced %d new message(s) for '%s'",
-        len(new_messages),
-        confirmed.get("imdb_title", "?"),
-    )
+    _log_agent_turn(new_messages, confirmed_title)
 
     return {
         "messages": new_messages,
         "phase": "qa",
         "next_action": "wait",
     }
+
+
+def _log_agent_turn(messages: list[BaseMessage], movie_title: str) -> None:
+    """Log tool calls, tool results, and the final agent response for a Q&A turn."""
+    tool_call_count = 0
+    for msg in messages:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            for tc in msg.tool_calls:
+                tool_call_count += 1
+                args_preview = _truncate(str(tc.get("args", {})), 300)
+                logger.debug(
+                    f"→ TOOL CALL  [{movie_title}] | tool={tc.get('name', '?')} | args={args_preview}"
+                )
+        elif isinstance(msg, ToolMessage):
+            content_preview = _truncate(str(msg.content), 400)
+            logger.debug(
+                f"← TOOL RESULT [{movie_title}] | tool={msg.name or '?'} | {content_preview}"
+            )
+        elif isinstance(msg, AIMessage):
+            # Final agent response (no tool calls)
+            response_preview = _truncate(str(msg.content), 500)
+            logger.info(f"← AGENT [{movie_title}] | {response_preview}")
+
+    if tool_call_count:
+        logger.info(f"Agent used {tool_call_count} tool call(s) to answer about '{movie_title}'")
+
+
+def _truncate(text: str, max_len: int) -> str:
+    """Truncate long strings for log readability."""
+    return text if len(text) <= max_len else text[:max_len] + " …"
 
 
 # ---------------------------------------------------------------------------

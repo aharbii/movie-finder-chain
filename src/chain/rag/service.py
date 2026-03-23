@@ -10,15 +10,12 @@ during ingestion (configured via ChainConfig).
 
 from __future__ import annotations
 
-import logging
-
 from openai import OpenAI
 from qdrant_client import QdrantClient
 
 from chain.config import ChainConfig
 from chain.models.output import RagCandidate
-
-logger = logging.getLogger(__name__)
+from chain.utils.logger import get_logger
 
 
 class MovieSearchService:
@@ -37,6 +34,7 @@ class MovieSearchService:
     def __init__(self, config: ChainConfig) -> None:
         self._collection = config.qdrant_collection
         self._embedding_model = config.embedding_model
+        self.logger = get_logger(self.__class__.__name__)
 
         self._openai = OpenAI(api_key=config.openai_api_key)
         self._qdrant = QdrantClient(
@@ -75,11 +73,7 @@ class MovieSearchService:
             input=text,
             model=self._embedding_model,
         )
-        logger.debug(
-            "Embedded query (%d tokens): '%s...'",
-            response.usage.total_tokens,
-            text[:60],
-        )
+        self.logger.debug(f"Embedded query ({response.usage.total_tokens} tokens): {text[:60]!r}")
         return list(response.data[0].embedding)
 
     def _search_qdrant(self, vector: list[float], top_k: int) -> list[RagCandidate]:
@@ -111,7 +105,13 @@ class MovieSearchService:
                 )
             )
 
-        logger.info("RAG search returned %d candidates", len(candidates))
+        self.logger.info(
+            f"RAG returned {len(candidates)} candidate(s) from collection {self._collection!r}"
+        )
+        for i, c in enumerate(candidates, start=1):
+            self.logger.debug(
+                f"  #{i}  {c.title} ({c.release_year or '?'}) | director: {c.director or '—'} | genre: {', '.join(c.genre[:3]) if c.genre else '—'}"
+            )
         return candidates
 
 

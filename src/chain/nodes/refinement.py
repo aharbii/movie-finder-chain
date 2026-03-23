@@ -13,7 +13,6 @@ presentation all happen within the same graph invocation.
 from __future__ import annotations
 
 import importlib.resources
-import logging
 from typing import Any, cast
 
 from langchain_anthropic import ChatAnthropic
@@ -23,8 +22,9 @@ from pydantic import SecretStr
 from chain.config import get_config
 from chain.models.output import RefinementPlan
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def refinement_node(state: MovieFinderState) -> dict[str, Any]:
@@ -33,6 +33,10 @@ async def refinement_node(state: MovieFinderState) -> dict[str, Any]:
     messages: list[BaseMessage] = state.get("messages", [])
     original_query: str = state.get("user_plot_query", "")
     refinement_count: int = state.get("refinement_count", 0)
+
+    logger.info(
+        f"Refining search (attempt {refinement_count + 1}/{cfg.max_refinements}) | original query: {original_query[:100]!r}"
+    )
 
     conversation_history = _format_conversation(messages)
 
@@ -52,18 +56,15 @@ async def refinement_node(state: MovieFinderState) -> dict[str, Any]:
             await llm.ainvoke([HumanMessage(content=prompt_text)]),
         )
     except Exception as exc:
-        logger.error("Refinement LLM failed: %s", exc)
+        logger.error(f"Refinement LLM failed: {exc}")
         # Fall back to the original query — at least we won't crash
         plan = RefinementPlan(
             refined_query=original_query,
             message_to_user="Let me search again with what we have so far…",
         )
 
-    logger.info(
-        "Refined query (attempt %d): '%s...'",
-        refinement_count + 1,
-        plan.refined_query[:80],
-    )
+    logger.info(f"Refined query: {original_query[:80]!r} → {plan.refined_query[:80]!r}")
+    logger.debug(f"Message to user: {plan.message_to_user!r}")
 
     return {
         "user_plot_query": plan.refined_query,

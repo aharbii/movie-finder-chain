@@ -7,14 +7,14 @@ branch.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from langchain_core.messages import AIMessage
 
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def presentation_node(state: MovieFinderState) -> dict[str, Any]:
@@ -23,6 +23,7 @@ def presentation_node(state: MovieFinderState) -> dict[str, Any]:
     refinement_count: int = state.get("refinement_count", 0)
 
     if not movies:
+        logger.warning("No enriched movies to present — asking user for more details")
         text = (
             "I searched our database but couldn't find any movies matching your description. "
             "Could you share more details — for example, the approximate decade, country of "
@@ -33,6 +34,15 @@ def presentation_node(state: MovieFinderState) -> dict[str, Any]:
             "phase": "confirmation",
             "next_action": "wait",
         }
+
+    attempt_label = "initial" if refinement_count == 0 else f"refinement #{refinement_count}"
+    logger.info(f"Presenting {len(movies)} candidate(s) to user [{attempt_label}]")
+    for i, m in enumerate(movies, start=1):
+        t = m.get("imdb_title") or m.get("rag_title", "?")
+        y = m.get("imdb_year") or m.get("rag_year") or "?"
+        conf = m.get("confidence", 0.0)
+        imdb_id = m.get("imdb_id", "—")
+        logger.debug(f"  #{i}  {t} ({y})  conf={conf:.2f}  imdb={imdb_id}")
 
     lines: list[str] = []
 

@@ -18,7 +18,6 @@ Design choices
 from __future__ import annotations
 
 import asyncio
-import logging
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -28,8 +27,9 @@ from imdbapi.models.title import BatchGetTitlesResponse
 
 from chain.config import get_config
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # IMDb search returns TitleRef-like summaries; batch_get accepts up to 5 IDs.
 _BATCH_SIZE = 5
@@ -83,7 +83,7 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
                 for title in resp.titles:
                     id_to_full[title.id] = _title_to_dict(title)
             except Exception as exc:
-                logger.warning("batch_get failed for %s: %s", batch, exc)
+                logger.warning(f"batch_get failed for {batch}: {exc}")
 
     # Step 3: merge RAG + IMDb data into enriched records
     enriched: list[dict[str, Any]] = []
@@ -114,9 +114,7 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
         )
 
     logger.info(
-        "Enriched %d/%d candidates with IMDb data",
-        sum(1 for e in enriched if e.get("imdb_id")),
-        len(enriched),
+        f"Enriched {sum(1 for e in enriched if e.get('imdb_id'))}/{len(enriched)} candidates with IMDb data"
     )
     return {"enriched_movies": enriched}
 
@@ -138,11 +136,7 @@ async def _batch_get_with_retry(client: IMDBAPIClient, ids: list[str]) -> BatchG
             if attempt == _RETRY_MAX_ATTEMPTS:
                 break
             logger.warning(
-                "batch_get rate-limited (attempt %d/%d) — retrying in %.0fs: %s",
-                attempt,
-                _RETRY_MAX_ATTEMPTS,
-                delay,
-                exc,
+                f"batch_get rate-limited (attempt {attempt}/{_RETRY_MAX_ATTEMPTS}) — retrying in {delay:.0f}s: {exc}"
             )
             await asyncio.sleep(delay)
             delay *= 2  # exponential backoff
@@ -172,29 +166,32 @@ async def _search_best_match(
             break  # success
         except IMDBAPIRateLimitError as exc:
             if attempt == _RETRY_MAX_ATTEMPTS:
-                logger.warning("IMDB search failed for '%s': %s", title, exc)
+                logger.warning(f"IMDB search failed for '{title}': {exc}")
                 return candidate, None, 0.0
             logger.warning(
-                "Search rate-limited for '%s' (attempt %d/%d) — retrying in %.0fs",
-                title,
-                attempt,
-                _RETRY_MAX_ATTEMPTS,
-                delay,
+                f"Search rate-limited for '{title}' (attempt {attempt}/{_RETRY_MAX_ATTEMPTS}) — retrying in {delay:.0f}s"
             )
             await asyncio.sleep(delay)
             delay *= 2
         except Exception as exc:
-            logger.warning("IMDB search failed for '%s': %s", title, exc)
+            logger.warning(f"IMDB search failed for '{title}': {exc}")
             return candidate, None, 0.0
 
     best_id: str | None = None
     best_score = 0.0
+    best_title = ""
 
     for hit in result.titles:
         score = _compute_confidence(candidate, hit)
         if score > best_score:
             best_score = score
             best_id = hit.id
+            best_title = getattr(hit, "primary_title", "") or ""
+
+    if best_id:
+        logger.debug(f"IMDb match: {title!r} → {best_title!r} ({best_id}) conf={best_score:.2f}")
+    else:
+        logger.debug(f"IMDb: no match found for {title!r} (searched {len(result.titles)} hits)")
 
     return candidate, best_id, best_score
 

@@ -7,13 +7,13 @@ candidate pool presented to the user.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from chain.config import get_config
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def validation_node(state: MovieFinderState) -> dict[str, Any]:
@@ -43,9 +43,7 @@ def validation_node(state: MovieFinderState) -> dict[str, Any]:
     # an empty pool when RAG found candidates.
     if not deduped and enriched:
         logger.warning(
-            "No candidates above confidence threshold %.2f — returning all %d raw candidates",
-            cfg.confidence_threshold,
-            len(enriched),
+            f"No candidates above confidence threshold {cfg.confidence_threshold:.2f} — returning all {len(enriched)} raw candidates"
         )
         deduped = sorted(enriched, key=lambda m: m["confidence"], reverse=True)
 
@@ -53,9 +51,6 @@ def validation_node(state: MovieFinderState) -> dict[str, Any]:
     final = deduped[:5]
 
     logger.info(
-        "Validation: %d enriched → %d validated → %d displayed",
-        len(enriched),
-        len(deduped),
-        len(final),
+        f"Validation: {len(enriched)} enriched → {len(deduped)} validated → {len(final)} displayed"
     )
     return {"enriched_movies": final}

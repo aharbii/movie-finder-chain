@@ -12,11 +12,17 @@ from langchain_core.messages import AIMessage
 
 from chain.config import get_config
 from chain.state import MovieFinderState
+from chain.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def dead_end_node(state: MovieFinderState) -> dict[str, Any]:
     """Return a graceful dead-end message to the user."""
     cfg = get_config()
+    logger.info(
+        f"Dead end reached after {cfg.max_refinements} refinement attempt(s) — no matching movie found"
+    )
 
     text = (
         f"After {cfg.max_refinements} search attempts, I wasn't able to find your movie "
