@@ -1,0 +1,49 @@
+name: "Enhancement (local)"
+description: "A feature request or improvement specific to this repo, not yet tracked in the main tracker."
+title: "[FEAT] <short description>"
+labels: ["enhancement"]
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Local Enhancement
+        If this enhancement is part of a finding already tracked in the
+        [main movie-finder repo](https://github.com/aharbii/movie-finder/issues),
+        use the **Linked Task** template instead.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priority"
+      options:
+        - "critical – needed before next release"
+        - "high     – deliver in current sprint"
+        - "medium   – near term"
+        - "low      – backlog"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivation"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance criteria"
+      placeholder: |
+        - [ ] …
+        - [ ] Tests pass
+    validations:
+      required: false

@@ -1,0 +1,77 @@
+name: "Linked Task (from main tracker)"
+description: "Work item linked from an issue in aharbii/movie-finder. Use this for all cross-repo tasks."
+title: "[TASK] <copy title from parent issue>"
+labels: ["task"]
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Linked Task
+        This issue represents the work item for a finding originally tracked in the
+        **[movie-finder main tracker](https://github.com/aharbii/movie-finder/issues)**.
+
+        After creating this issue, go back to the parent issue and paste this URL
+        into the **"Linked submodule issue"** field.
+
+  - type: input
+    id: parent_issue
+    attributes:
+      label: "Parent issue (main tracker)"
+      description: "URL of the originating issue in aharbii/movie-finder"
+      placeholder: "https://github.com/aharbii/movie-finder/issues/<N>"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: "Issue type"
+      options:
+        - "bug           – runtime defect"
+        - "technical-debt – design / code quality"
+        - "security       – vulnerability / hardening"
+        - "enhancement    – new feature / improvement"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity / Priority"
+      options:
+        - "critical"
+        - "high"
+        - "medium"
+        - "low"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: "Summarise the work to be done in this repo. Copy from the parent issue if unchanged."
+    validations:
+      required: true
+
+  - type: textarea
+    id: file_refs
+    attributes:
+      label: "Relevant files / lines"
+      placeholder: |
+        src/chain/graph.py:192
+        src/app/session/store.py:52–83
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance criteria"
+      placeholder: |
+        - [ ] …
+        - [ ] All tests pass
+        - [ ] PR reviewed and merged
+    validations:
+      required: false

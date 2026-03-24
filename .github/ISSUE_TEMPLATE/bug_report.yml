@@ -1,0 +1,63 @@
+name: "Bug Report (local)"
+description: "A defect found directly in this repo, not yet tracked in the main movie-finder tracker."
+title: "[BUG] <short description>"
+labels: ["bug"]
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Local Bug Report
+        If this bug is part of a broader finding already tracked in the
+        [main movie-finder repo](https://github.com/aharbii/movie-finder/issues),
+        use the **Linked Task** template instead.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      options:
+        - "critical – data loss / security breach / service down"
+        - "high     – major feature broken, no workaround"
+        - "medium   – feature degraded, workaround exists"
+        - "low      – cosmetic / minor inconvenience"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      placeholder: |
+        **Actual behaviour:**
+        …
+        **Expected behaviour:**
+        …
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Steps to reproduce"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment"
+      placeholder: |
+        - Python / Node version:
+        - Branch / commit:
+        - Docker / local:
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Relevant logs"
+      render: text
+    validations:
+      required: false

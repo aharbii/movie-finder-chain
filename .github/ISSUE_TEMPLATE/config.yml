@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Open a tracking issue in the main repo first"
+    url: https://github.com/aharbii/movie-finder/issues/new/choose
+    about: All issues should originate in the main movie-finder tracker. Open one there, then link it back here using the Linked Task template.
