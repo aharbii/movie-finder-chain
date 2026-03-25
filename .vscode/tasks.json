@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "lint",
+      "type": "shell",
+      "command": "cd .. && uv run ruff check chain/ && uv run mypy chain/src/",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "format",
+      "type": "shell",
+      "command": "cd .. && uv run ruff format chain/",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "test",
+      "type": "shell",
+      "command": "cd .. && uv run pytest chain/tests/ --asyncio-mode=auto -v",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "test: with coverage",
+      "type": "shell",
+      "command": "cd .. && uv run pytest chain/tests/ --asyncio-mode=auto -v --cov=chain --cov-report=html",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "pre-commit: run all",
+      "type": "shell",
+      "command": "uv run pre-commit run --all-files",
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}

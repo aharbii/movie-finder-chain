@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    // ── Interactive chain runner ────────────────────────────────────────────
+    {
+      "name": "chain: run chat.py (interactive)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/chat.py",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/../.venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+
+    // ── pytest ──────────────────────────────────────────────────────────────
+    {
+      "name": "pytest: All tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests/", "--asyncio-mode=auto", "-v"],
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/../.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "pytest: Current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "--asyncio-mode=auto", "-v"],
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/../.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
