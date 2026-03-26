@@ -34,6 +34,25 @@ LangGraph 8-node AI pipeline.
 
 ---
 
+## Workflow invariants
+
+- This repo is the gitlink path `chain` inside `aharbii/movie-finder-backend`. Parent
+  workflow/path filters must use `chain`, not `chain/**`.
+- Cross-repo tracker issues originate in `aharbii/movie-finder`. Create the linked child issue in
+  this repo only if this repo will actually change.
+- Inspect `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md` when present, and a
+  recent example before creating or editing issues/PRs. Do not improvise titles or bodies.
+- For child issues in this repo, use `.github/ISSUE_TEMPLATE/linked_task.yml` and keep the
+  description, file references, and acceptance criteria repo-specific.
+- If CI, required checks, or merge policy changes affect this repo, update contributor-facing docs
+  here and in `aharbii/movie-finder-backend` and/or `aharbii/movie-finder` where relevant.
+- If a new standalone issue appears mid-session, branch from `main` unless stacking is explicitly
+  requested.
+- PR descriptions must disclose the AI authoring tool + model. Any AI-assisted review comment or
+  approval must also disclose the review tool + model.
+
+---
+
 ## VSCode setup
 
 `backend/chain/.vscode/` — full workspace configuration for chain only.
@@ -41,4 +60,4 @@ LangGraph 8-node AI pipeline.
 - `launch.json`: `chat.py` interactive runner + pytest all/current file
 - `tasks.json`: lint, test, pre-commit (commands cd to `backend/` for workspace context)
 - Modifying configs: keep parity with `backend/.vscode/` aggregate tasks. Update `CLAUDE.md`,
-  `GEMINI.md`, and `AGENTS.md` after.
+  `GEMINI.md`, `AGENTS.md`, and the repo's `.github/copilot-instructions.md` after.
