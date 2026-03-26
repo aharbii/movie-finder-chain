@@ -146,12 +146,34 @@ uv run pre-commit run --all-files
 
 ---
 
+## Workflow invariants
+
+- This repo is the gitlink path `chain` inside `aharbii/movie-finder-backend`. Parent
+  workflow/path filters must use `chain`, not `chain/**`.
+- Cross-repo tracker issues originate in `aharbii/movie-finder`. Create the linked child issue in
+  this repo only if this repo will actually change.
+- Inspect `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md` when present, and a
+  recent example before creating or editing issues/PRs. Do not improvise titles or bodies.
+- For child issues in this repo, use `.github/ISSUE_TEMPLATE/linked_task.yml` and keep the
+  description, file references, and acceptance criteria repo-specific.
+- If CI, required checks, or merge policy changes affect this repo, update contributor-facing docs
+  here and in `aharbii/movie-finder-backend` and/or `aharbii/movie-finder` where relevant.
+- If a new standalone issue appears mid-session, branch from `main` unless stacking is explicitly
+  requested.
+- PR descriptions must disclose the AI authoring tool + model. Any AI-assisted review comment or
+  approval must also disclose the review tool + model.
+
+---
+
 ## Session start protocol
 
 1. `gh issue list --repo aharbii/movie-finder --state open`
-2. Create issue in `aharbii/movie-finder`, then `aharbii/movie-finder-chain` linked to parent
-3. Create branch: `feature/`, `fix/`, `chore/`, `docs/`
-4. Work through the cross-cutting checklist below
+2. Inspect `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md` when present, and a
+   recent example of the same type
+3. Create the parent issue in `aharbii/movie-finder`, then the linked child issue in
+   `aharbii/movie-finder-chain` only if this repo will actually change
+4. Create a branch from `main`: `feature/`, `fix/`, `chore/`, `docs/`
+5. Work through the cross-cutting checklist below
 
 ---
 
@@ -169,10 +191,12 @@ Conventional Commits: `feat(chain): add Gemini embedding support`
 
 ### 1. GitHub issues
 - [ ] `aharbii/movie-finder` (parent)
-- [ ] `aharbii/movie-finder-chain` linked (`Part of aharbii/movie-finder#N`)
+- [ ] `aharbii/movie-finder-chain` linked child issue only if this repo changes
+- [ ] Matching issue/PR templates and a recent example were inspected before filing or editing
 
 ### 2. Branch
 - [ ] Branch in this repo + `chore/` in `backend/` and root `movie-finder`
+- [ ] New standalone issues branch from `main` unless stacking is explicitly requested
 
 ### 3. ADR
 - [ ] New LLM provider, new embedding model, new external dependency, or pipeline architecture change?
@@ -199,7 +223,7 @@ Conventional Commits: `feat(chain): add Gemini embedding support`
 - [ ] Root `docker-compose.yml` if service interface changed
 
 ### 7. CI — Jenkins
-- [ ] `Jenkinsfile` reviewed — new credentials or env vars?
+- [ ] `.github/workflows/*.yml` and/or `Jenkinsfile` reviewed — new credentials, permissions, or env vars?
 - [ ] LangSmith project name consistent between CI credentials and `.env.example`
 
 ### 8. Architecture diagrams (in `docs/` submodule)
@@ -213,6 +237,7 @@ Conventional Commits: `feat(chain): add Gemini embedding support`
 - [ ] `README.md` updated
 - [ ] `CHANGELOG.md` under `[Unreleased]`
 - [ ] OpenAPI: chain changes may affect `app/` SSE event shape — verify `/docs`
+- [ ] Contributor docs updated when CI, required checks, or merge policy change
 
 ### 10. Sibling submodules likely affected
 | Submodule | Why |
@@ -231,6 +256,7 @@ git add backend && git commit -m "chore(backend): bump to latest main"  # in roo
 ```
 
 ### 12. Pull request
-- [ ] PR in `aharbii/movie-finder-chain`
+- [ ] PR in `aharbii/movie-finder-chain` discloses the AI authoring tool + model
 - [ ] PR in `aharbii/movie-finder-backend` (pointer bump)
 - [ ] PR in `aharbii/movie-finder` (pointer bump)
+- [ ] Any AI-assisted review comment or approval discloses the review tool + model
