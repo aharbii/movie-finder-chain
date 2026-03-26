@@ -31,7 +31,6 @@ LangGraph 8-node AI pipeline.
 - `uv run pre-commit run --all-files` from this directory.
 - `mypy --strict` must pass for all nodes.
 
-
 ---
 
 ## Workflow invariants
