@@ -28,7 +28,8 @@ LangGraph 8-node AI pipeline.
 ---
 
 ## Pre-commit & Linting
-- `uv run pre-commit run --all-files` from this directory.
+- Docker-only local workflow from this directory: `make lint`, `make format`, `make typecheck`,
+  `make test`, `make pre-commit`.
 - `mypy --strict` must pass for all nodes.
 
 ---
@@ -55,8 +56,9 @@ LangGraph 8-node AI pipeline.
 ## VSCode setup
 
 `backend/chain/.vscode/` — full workspace configuration for chain only.
-- Interpreter: `backend/.venv/bin/python` (`uv sync --all-packages` from `backend/`)
-- `launch.json`: `chat.py` interactive runner + pytest all/current file
-- `tasks.json`: lint, test, pre-commit (commands cd to `backend/` for workspace context)
+- Workflow: run `make dev`, then attach VS Code to the running `chain` container
+- Interpreter: `/opt/venv/bin/python` inside the attached container
+- `launch.json`: `chat.py` interactive runner + pytest all/current file in the attached container
+- `tasks.json`: Docker-backed `make ...` targets from `backend/chain/`
 - Modifying configs: keep parity with `backend/.vscode/` aggregate tasks. Update `CLAUDE.md`,
   `GEMINI.md`, `AGENTS.md`, and the repo's `.github/copilot-instructions.md` after.

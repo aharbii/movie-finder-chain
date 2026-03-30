@@ -5,6 +5,8 @@ Fail-fast validation happens on first import so misconfigured deployments
 surface immediately rather than at the first API call.
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
 
 from pydantic import Field, field_validator
@@ -12,75 +14,91 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ChainConfig(BaseSettings):
-    """Environment-driven configuration for the Movie Finder chain."""
+    """Configuration singleton for the Movie Finder chain.
+
+    Attributes:
+        qdrant_url: Qdrant Cloud cluster URL.
+        qdrant_api_key_ro: Read-only API key for the cluster.
+        qdrant_collection_name: Name of the collection to search.
+        openai_api_key: OpenAI API key (for embeddings).
+        anthropic_api_key: Anthropic API key (for Claude reasoning).
+        embedding_model: The OpenAI embedding model name.
+        embedding_dimension: Dimension of the vectors (must match collection).
+        classifier_model: Claude model name for routing/classification.
+        reasoning_model: Claude model name for presentation/Q&A.
+        langsmith_tracing: Whether to enable LangSmith tracing.
+        langsmith_endpoint: LangSmith API endpoint.
+        langsmith_api_key: LangSmith API key.
+        langsmith_project: LangSmith project name.
+        rag_top_k: Number of candidates to fetch from Qdrant.
+        max_refinements: Max discovery refinement loops before dead-ending.
+        imdb_search_limit: Max hits per IMDb search query.
+        confidence_threshold: Minimum IMDb match score to present to user.
+        log_level: Logging level (INFO, DEBUG, etc.).
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False,
         extra="ignore",
     )
 
-    # --- Vector store (Qdrant) ---
-    qdrant_endpoint: str = Field(..., description="Qdrant Cloud cluster URL")
-    qdrant_api_key: str = Field(..., description="Qdrant API key")
-    # Must match the collection created during rag_ingestion (embedding model name)
-    qdrant_collection: str = Field(
-        default="text-embedding-3-large",
-        description="Qdrant collection name (matches ingestion embedding model)",
-    )
+    # --- Qdrant ---
+    qdrant_url: str = Field(..., alias="QDRANT_URL")
+    qdrant_api_key_ro: str = Field(..., alias="QDRANT_API_KEY_RO")
+    qdrant_collection_name: str = Field("movies", alias="QDRANT_COLLECTION_NAME")
 
-    # --- Embedding (OpenAI) ---
-    openai_api_key: str = Field(..., description="OpenAI API key for embeddings")
-    embedding_model: str = Field(
-        default="text-embedding-3-large",
-        description="OpenAI embedding model — must match the ingestion model",
-    )
-    embedding_dimension: int = Field(
-        default=3072,
-        description="Embedding vector dimension — must match the ingestion model",
-    )
+    # --- LLM Providers ---
+    openai_api_key: str = Field(..., alias="OPENAI_API_KEY")
+    anthropic_api_key: str = Field(..., alias="ANTHROPIC_API_KEY")
 
-    # --- LLM (Anthropic) ---
-    anthropic_api_key: str = Field(..., description="Anthropic API key")
-    # Fast classifier for confirmation step
-    classifier_model: str = Field(
-        default="claude-haiku-4-5-20251001",
-        description="Lightweight model for confirmation classification",
-    )
-    # Full reasoning for refinement and Q&A
-    reasoning_model: str = Field(
-        default="claude-sonnet-4-6",
-        description="Model for refinement query building and Q&A agent",
-    )
+    # --- Models ---
+    embedding_model: str = Field("text-embedding-3-large", alias="EMBEDDING_MODEL")
+    embedding_dimension: int = Field(3072, alias="EMBEDDING_DIMENSION")
+    classifier_model: str = Field("claude-haiku-4-5-20251001", alias="CLASSIFIER_MODEL")
+    reasoning_model: str = Field("claude-sonnet-4-6", alias="REASONING_MODEL")
 
-    # --- Search tuning ---
-    rag_top_k: int = Field(default=8, ge=1, le=20, description="Number of RAG candidates")
-    max_refinements: int = Field(
-        default=3, ge=1, le=5, description="Max refinement cycles before dead-end"
+    # --- LangSmith ---
+    langsmith_tracing: bool = Field(False, alias="LANGSMITH_TRACING")
+    langsmith_endpoint: str = Field(
+        "https://api.smith.langchain.com", alias="LANGSMITH_ENDPOINT"
     )
-    imdb_search_limit: int = Field(
-        default=3, ge=1, le=10, description="IMDB search results per RAG candidate"
-    )
-    confidence_threshold: float = Field(
-        default=0.3, ge=0.0, le=1.0, description="Minimum confidence to include in results"
-    )
+    langsmith_api_key: str | None = Field(None, alias="LANGSMITH_API_KEY")
+    langsmith_project: str = Field("movie-finder", alias="LANGSMITH_PROJECT")
 
-    # --- LangSmith observability ---
-    langsmith_tracing: bool = Field(default=False)
-    langsmith_endpoint: str = Field(default="https://api.smith.langchain.com")
-    langsmith_api_key: str = Field(default="")
-    langsmith_project: str = Field(default="movie-finder")
+    # --- Pipeline Logic ---
+    rag_top_k: int = Field(8, alias="RAG_TOP_K")
+    max_refinements: int = Field(3, alias="MAX_REFINEMENTS")
+    imdb_search_limit: int = Field(3, alias="IMDB_SEARCH_LIMIT")
+    confidence_threshold: float = Field(0.3, alias="CONFIDENCE_THRESHOLD")
 
-    @field_validator("qdrant_endpoint")
+    # --- Logging ---
+    log_level: str = Field("INFO", alias="LOG_LEVEL")
+
+    @field_validator("qdrant_url", "langsmith_endpoint", mode="before")
     @classmethod
-    def validate_qdrant_endpoint(cls, v: str) -> str:
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("QDRANT_ENDPOINT must be a valid HTTP(S) URL")
+    def validate_url(cls, v: str) -> str:
+        """Strip trailing slash from URLs.
+
+        Args:
+            v: The URL string.
+
+        Returns:
+            URL without trailing slash.
+
+        Raises:
+            ValueError: If the URL doesn't start with http.
+        """
+        if v and not v.startswith("http"):
+            raise ValueError(f"{v} is not a valid HTTP(S) URL")
         return v.rstrip("/")
 
 
 @lru_cache(maxsize=1)
 def get_config() -> ChainConfig:
-    """Return the singleton ChainConfig instance (cached after first call)."""
+    """Return the singleton ChainConfig instance (cached after first call).
+
+    Returns:
+        The singleton ChainConfig.
+    """
     return ChainConfig()  # type: ignore[call-arg]

@@ -8,8 +8,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-<!-- Add new changes here under the appropriate subsection. -->
-<!-- Subsections: Added, Changed, Deprecated, Removed, Fixed, Security -->
+### Added
+
+- `Makefile` with Docker-backed repo-local targets for `dev`, `lint`, `format`,
+  `typecheck`, `test`, `test-coverage`, `pre-commit`, and the example scripts
+
+### Changed
+
+- `docker-compose.yml` now runs a single persistent `chain` dev container and
+  no longer ships a local Qdrant service
+- `Dockerfile`, `.vscode/*`, `README.md`, and `CONTRIBUTING.md` now follow the
+  Docker-only local development contract
+- Chain configuration now consumes the canonical read-only Qdrant env vars:
+  `QDRANT_URL`, `QDRANT_API_KEY_RO`, and `QDRANT_COLLECTION_NAME`
 
 ---
 

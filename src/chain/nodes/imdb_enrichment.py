@@ -23,7 +23,7 @@ from typing import Any
 
 from imdbapi import IMDBAPIClient
 from imdbapi.exceptions import IMDBAPIRateLimitError
-from imdbapi.models.title import BatchGetTitlesResponse
+from imdbapi.models.title import BatchGetTitlesResponse, Title
 
 from chain.config import get_config
 from chain.state import MovieFinderState
@@ -43,7 +43,14 @@ _RETRY_MAX_ATTEMPTS = 4
 
 
 async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
-    """Enrich every RAG candidate with live IMDb metadata."""
+    """Enrich every RAG candidate with live IMDb metadata.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        Partial state update with enriched_movies.
+    """
     cfg = get_config()
     candidates: list[dict[str, Any]] = state.get("rag_candidates", [])
 
@@ -125,7 +132,18 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
 
 
 async def _batch_get_with_retry(client: IMDBAPIClient, ids: list[str]) -> BatchGetTitlesResponse:
-    """Call ``client.titles.batch_get`` with exponential-backoff on 429."""
+    """Call ``client.titles.batch_get`` with exponential-backoff on 429.
+
+    Args:
+        client: The IMDb API client.
+        ids: The list of IMDb title IDs to fetch.
+
+    Returns:
+        The batch response.
+
+    Raises:
+        IMDBAPIRateLimitError: If max retry attempts reached.
+    """
     delay = _RETRY_BASE_DELAY
     last_exc: Exception | None = None
     for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
@@ -150,7 +168,18 @@ async def _search_best_match(
     semaphore: asyncio.Semaphore,
     initial_delay: float = 0.0,
 ) -> tuple[dict[str, Any], str | None, float]:
-    """Search IMDb for a title matching *candidate* and return the best hit."""
+    """Search IMDb for a title matching *candidate* and return the best hit.
+
+    Args:
+        client: The IMDb API client.
+        candidate: The RAG candidate dict.
+        search_limit: Max number of hits to fetch from search.
+        semaphore: The concurrency semaphore.
+        initial_delay: Time to sleep before firing the request.
+
+    Returns:
+        A tuple of (candidate, best_imdb_id, confidence_score).
+    """
     title = candidate.get("title", "")
     year = candidate.get("release_year", 0)
     query = f"{title} {year}" if year else title
@@ -186,7 +215,7 @@ async def _search_best_match(
         if score > best_score:
             best_score = score
             best_id = hit.id
-            best_title = getattr(hit, "primary_title", "") or ""
+            best_title = hit.primary_title or ""
 
     if best_id:
         logger.debug(f"IMDb match: {title!r} → {best_title!r} ({best_id}) conf={best_score:.2f}")
@@ -196,7 +225,7 @@ async def _search_best_match(
     return candidate, best_id, best_score
 
 
-def _compute_confidence(candidate: dict[str, Any], imdb_hit: object) -> float:
+def _compute_confidence(candidate: dict[str, Any], imdb_hit: Title) -> float:
     """Score how well an IMDb search hit matches a RAG candidate (0–1).
 
     Blends two signals:
@@ -208,12 +237,19 @@ def _compute_confidence(candidate: dict[str, Any], imdb_hit: object) -> float:
     Weight: 40% vector relevance + 60% IMDb match.  This ensures candidates
     with identical IMDb record quality (e.g. exact title+year) are still
     differentiated by their semantic distance to the user's query.
+
+    Args:
+        candidate: The RAG candidate dict.
+        imdb_hit: The IMDb Title hit summary.
+
+    Returns:
+        A confidence score between 0.0 and 1.0.
     """
     # --- IMDb match score: title similarity + year proximity (0–1) ---
     imdb_match = 0.0
 
-    rag_year: int = candidate.get("release_year", 0) or 0
-    imdb_year: int = getattr(imdb_hit, "start_year", None) or 0
+    rag_year: int = candidate.get("release_year") or 0
+    imdb_year: int = imdb_hit.start_year or 0
     if rag_year and imdb_year:
         diff = abs(rag_year - imdb_year)
         if diff == 0:
@@ -224,7 +260,7 @@ def _compute_confidence(candidate: dict[str, Any], imdb_hit: object) -> float:
             imdb_match += 0.15
 
     rag_title = (candidate.get("title", "") or "").lower().strip()
-    imdb_title = (getattr(imdb_hit, "primary_title", "") or "").lower().strip()
+    imdb_title = (imdb_hit.primary_title or "").lower().strip()
     if rag_title and imdb_title:
         if rag_title == imdb_title:
             imdb_match += 0.5
@@ -241,20 +277,27 @@ def _compute_confidence(candidate: dict[str, Any], imdb_hit: object) -> float:
     return min(0.4 * rag_score + 0.6 * imdb_match, 1.0)
 
 
-def _title_to_dict(title: object) -> dict[str, Any]:
-    """Convert a Title model to a plain dict for state storage."""
-    directors = [d.display_name for d in (getattr(title, "directors", []) or [])]
-    stars = [s.display_name for s in (getattr(title, "stars", []) or [])]
-    rating_obj = getattr(title, "rating", None)
-    image_obj = getattr(title, "primary_image", None)
+def _title_to_dict(title: Title) -> dict[str, Any]:
+    """Convert a Title model to a plain dict for state storage.
+
+    Args:
+        title: The IMDb Title model.
+
+    Returns:
+        A dictionary representation of the title metadata.
+    """
+    directors = [d.display_name for d in (title.directors or [])]
+    stars = [s.display_name for s in (title.stars or [])]
+    rating_obj = title.rating
+    image_obj = title.primary_image
 
     return {
-        "id": getattr(title, "id", None),
-        "primaryTitle": getattr(title, "primary_title", None),
-        "startYear": getattr(title, "start_year", None),
+        "id": title.id,
+        "primaryTitle": title.primary_title,
+        "startYear": title.start_year,
         "rating": rating_obj.aggregate_rating if rating_obj else None,
-        "plot": getattr(title, "plot", None),
-        "genres": getattr(title, "genres", []) or [],
+        "plot": title.plot,
+        "genres": title.genres or [],
         "directors": directors,
         "stars": stars,
         "posterUrl": image_obj.url if image_obj else None,

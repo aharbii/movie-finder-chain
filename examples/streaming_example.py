@@ -5,35 +5,37 @@ Demonstrates how to stream the chain's responses token-by-token using
 
 Run::
 
-    cd backend
-    uv run python chain/examples/streaming_example.py
+    make example-streaming
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+from typing import cast
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
+from langgraph.graph.graph import CompiledGraph
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../../.env"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../.env"))
 
 from chain.graph import compile_graph  # noqa: E402
+from chain.state import MovieFinderState  # noqa: E402
 
 
-async def stream_discovery(query: str, thread_id: str = "stream-demo") -> dict:
+async def stream_discovery(query: str, thread_id: str = "stream-demo") -> MovieFinderState:
     """Stream a discovery query and print tokens as they arrive.
 
     Returns the final graph state so callers can inspect enriched_movies.
     """
-    graph = compile_graph()
+    graph: CompiledGraph = compile_graph()
     config = {"configurable": {"thread_id": thread_id}}
 
     print(f"\nUser: {query}")
     print("\nAssistant: ", end="", flush=True)
 
-    final_state: dict = {}
+    final_state = cast(MovieFinderState, {})
 
     async for event in graph.astream_events(
         {"messages": [HumanMessage(content=query)]},
@@ -56,7 +58,7 @@ async def stream_discovery(query: str, thread_id: str = "stream-demo") -> dict:
 
         # Capture the final state after the graph completes
         elif event_type == "on_chain_end" and event.get("name") == "LangGraph":
-            final_state = event["data"].get("output", {})
+            final_state = cast(MovieFinderState, event["data"].get("output", {}))
 
     print()  # newline after streaming ends
     return final_state
@@ -64,7 +66,7 @@ async def stream_discovery(query: str, thread_id: str = "stream-demo") -> dict:
 
 async def stream_qa(question: str, thread_id: str) -> None:
     """Stream a Q&A response for an already-confirmed movie session."""
-    graph = compile_graph()
+    graph: CompiledGraph = compile_graph()
     config = {"configurable": {"thread_id": thread_id}}
 
     print(f"\nUser: {question}")
@@ -115,9 +117,12 @@ async def main() -> None:
     graph = compile_graph()
     config = {"configurable": {"thread_id": thread}}
 
-    confirm_state = await graph.ainvoke(
-        {"messages": [HumanMessage(content="Yes, the first one!")]},
-        config=config,
+    confirm_state = cast(
+        MovieFinderState,
+        await graph.ainvoke(
+            {"messages": [HumanMessage(content="Yes, the first one!")]},
+            config=config,
+        ),
     )
 
     if confirm_state.get("phase") != "qa":

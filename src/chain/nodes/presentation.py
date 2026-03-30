@@ -1,8 +1,8 @@
 """Presentation node.
 
-Formats the validated candidate pool into a user-facing AI message and sets
-``phase = "confirmation"`` so the next invocation routes to the confirmation
-branch.
+Formats the enriched movie candidates into a user-friendly AIMessage.
+If multiple candidates are found, they are presented as a numbered list.
+If only one is found, it is presented with its primary details.
 """
 
 from __future__ import annotations
@@ -17,86 +17,96 @@ from chain.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def presentation_node(state: MovieFinderState) -> dict[str, Any]:
-    """Format enriched movies into a structured AI message for the user."""
+async def presentation_node(state: MovieFinderState) -> dict[str, Any]:
+    """Format and present the candidates to the user.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        Partial state update with an AIMessage and updated phase.
+    """
     movies: list[dict[str, Any]] = state.get("enriched_movies", [])
     refinement_count: int = state.get("refinement_count", 0)
 
     if not movies:
-        logger.warning("No enriched movies to present — asking user for more details")
-        text = (
-            "I searched our database but couldn't find any movies matching your description. "
-            "Could you share more details — for example, the approximate decade, country of "
-            "origin, a specific actor you remember, or a key scene?"
-        )
+        logger.info("No movies to present")
         return {
-            "messages": [AIMessage(content=text)],
-            "phase": "confirmation",
-            "next_action": "wait",
+            "messages": [AIMessage(content="I couldn't find any movies matching that description.")],
+            "phase": "discovery",  # Stay in discovery to let user try again
         }
 
-    attempt_label = "initial" if refinement_count == 0 else f"refinement #{refinement_count}"
-    logger.info(f"Presenting {len(movies)} candidate(s) to user [{attempt_label}]")
+    logger.info(f"Presenting {len(movies)} candidates to user")
+
+    content = _format_single(movies[0]) if len(movies) == 1 else _format_list(movies)
+
+    # Prefix with a "trying again" message if this was a refinement loop
+    if refinement_count > 0:
+        content = f"I've searched again with more details. Here is what I found:\n\n{content}"
+
+    return {
+        "messages": [AIMessage(content=content)],
+        "phase": "confirmation",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _format_list(movies: list[dict[str, Any]]) -> str:
+    """Format multiple movies into a numbered list.
+
+    Args:
+        movies: The list of movie records.
+
+    Returns:
+        A formatted string list.
+    """
+    lines = ["I found a few possibilities. Is it one of these?\n"]
     for i, m in enumerate(movies, start=1):
         t = m.get("imdb_title") or m.get("rag_title", "?")
         y = m.get("imdb_year") or m.get("rag_year") or "?"
         conf = m.get("confidence", 0.0)
         imdb_id = m.get("imdb_id", "—")
-        logger.debug(f"  #{i}  {t} ({y})  conf={conf:.2f}  imdb={imdb_id}")
+        lines.append(f"{i}. **{t}** ({y}) — *confidence: {conf:.0%}* [IMDb: {imdb_id}]")
 
-    lines: list[str] = []
+    lines.append("\nReply with the number, or say \"none of these\" to refine the search.")
+    return "\n".join(lines)
 
-    if refinement_count == 0:
-        lines.append("Based on your description, here are the movies that best match your plot:")
-    else:
-        lines.append(
-            f"I've refined the search (attempt {refinement_count + 1}) and found these candidates:"
-        )
 
-    lines.append("")
+def _format_single(movie: dict[str, Any]) -> str:
+    """Format a single movie with full details.
 
-    for i, movie in enumerate(movies, start=1):
-        title = movie.get("imdb_title") or movie.get("rag_title", "Unknown")
-        year = movie.get("imdb_year") or movie.get("rag_year") or "?"
-        rating = movie.get("imdb_rating")
-        directors = movie.get("imdb_directors") or []
-        stars = movie.get("imdb_stars") or []
-        genres = movie.get("imdb_genres") or movie.get("rag_genre") or []
-        plot = movie.get("imdb_plot") or ""
-        poster = movie.get("imdb_poster_url")
-        confidence = movie.get("confidence", 0.0)
+    Args:
+        movie: The movie record.
 
-        lines.append(f"**{i}. {title}** ({year})")
+    Returns:
+        A formatted string with movie details.
+    """
+    title = movie.get("imdb_title") or movie.get("rag_title", "Unknown")
+    year = movie.get("imdb_year") or movie.get("rag_year") or "?"
+    rating = movie.get("imdb_rating")
+    directors = movie.get("imdb_directors") or []
+    stars = movie.get("imdb_stars") or []
+    genres = movie.get("imdb_genres") or movie.get("rag_genre") or []
+    plot = movie.get("imdb_plot") or ""
+    poster = movie.get("imdb_poster_url")
+    confidence = movie.get("confidence", 0.0)
 
-        if rating:
-            lines.append(f"   ⭐ IMDb Rating: {rating}/10")
-        if directors:
-            lines.append(f"   🎬 Director(s): {', '.join(directors[:2])}")
-        if stars:
-            lines.append(f"   🎭 Stars: {', '.join(stars[:4])}")
-        if genres:
-            lines.append(f"   🎞️  Genre: {', '.join(genres[:3])}")
-        if plot:
-            # Trim to avoid spoilers — show only the first two sentences
-            sentences = plot.split(". ")
-            brief = ". ".join(sentences[:2])
-            if len(sentences) > 2:
-                brief += "..."
-            lines.append(f"   📖 {brief}")
-        if poster:
-            lines.append(f"   🖼️  Poster: {poster}")
-        if confidence < 0.5:
-            lines.append("   ⚠️  *(lower confidence match)*")
+    lines = [
+        f"I'm quite sure it's **{title}** ({year})!\n",
+        f"**IMDb Rating:** {rating}/10" if rating else "**IMDb Rating:** N/A",
+        f"**Genre:** {', '.join(genres)}" if genres else None,
+        f"**Director:** {', '.join(directors)}" if directors else None,
+        f"**Stars:** {', '.join(stars)}" if stars else None,
+        f"\n{plot}\n" if plot else "",
+        f"*(Confidence: {confidence:.0%})*" if confidence > 0 else "",
+    ]
 
-        lines.append("")
+    if poster:
+        lines.append(f"\n![Poster]({poster})")
 
-    lines.append(
-        '**Is your movie one of these?** Reply with the number (e.g. *"It\'s #2"*), '
-        "or tell me it's not listed and I'll search again with more details."
-    )
-
-    return {
-        "messages": [AIMessage(content="\n".join(lines))],
-        "phase": "confirmation",
-        "next_action": "wait",
-    }
+    lines.append("\nIs this the right one? (Yes/No)")
+    return "\n".join(filter(None, lines))

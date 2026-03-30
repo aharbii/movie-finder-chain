@@ -32,11 +32,20 @@ def reset_config_cache() -> Iterator[None]:
     get_config.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def default_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide the minimal config env vars needed by graph compilation."""
+    monkeypatch.setenv("QDRANT_URL", "https://test.qdrant.io")
+    monkeypatch.setenv("QDRANT_API_KEY_RO", "test-qdrant-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-openai")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+
+
 @pytest.fixture
 def mock_config(monkeypatch: pytest.MonkeyPatch) -> ChainConfig:
     """Return a ChainConfig pre-loaded with test-safe values."""
-    monkeypatch.setenv("QDRANT_ENDPOINT", "https://test.qdrant.io")
-    monkeypatch.setenv("QDRANT_API_KEY", "test-qdrant-key")
+    monkeypatch.setenv("QDRANT_URL", "https://test.qdrant.io")
+    monkeypatch.setenv("QDRANT_API_KEY_RO", "test-qdrant-key")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-openai")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     get_config.cache_clear()

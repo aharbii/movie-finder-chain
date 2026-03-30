@@ -54,11 +54,13 @@ complexity — the graph reads `phase` from state to decide which branch runs.
 
 ```
 chain/
+├── Makefile
 ├── pyproject.toml
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .pre-commit-config.yaml
 ├── README.md
+├── CONTRIBUTING.md
 ├── examples/
 │   ├── basic_usage.py          ← discovery + confirmation + Q&A walk-through
 │   └── streaming_example.py    ← token-level streaming demo
@@ -89,31 +91,42 @@ chain/
 
 ---
 
-## Installation
+## Local workflow
 
-### Using uv (recommended)
+`movie-finder-chain` is a child repo inside the backend workspace, but its
+local contributor contract is Docker-only and runs from `backend/chain/`.
 
-```bash
-# From the backend/ workspace root
-cd backend
-uv sync --all-packages
-```
+Prerequisites:
 
-This installs the chain package and its path-dependency (`imdbapi-client`)
-into a shared `.venv`.
+- Docker with the Compose plugin
+- `make`
 
-### Standalone
+Initialize a local env file, then start the persistent dev container:
 
 ```bash
-cd backend/chain
-uv sync
+cp .env.example .env
+make dev
 ```
 
----
+`make dev` keeps the `chain` container running for attached-container editing.
+In a second terminal, use the repo-local targets:
+
+```bash
+make lint
+make format
+make typecheck
+make test
+make test-coverage
+make pre-commit
+```
+
+VS Code is configured for this workflow: after `make dev`, attach to the
+running `chain` container and use the committed `.vscode/` launch/tasks files.
 
 ## Configuration
 
-Copy the root `.env.example` and fill in your credentials:
+Copy `.env.example` to `.env` and fill in the values needed for live examples
+or interactive runs:
 
 ```bash
 cp .env.example .env
@@ -121,22 +134,25 @@ cp .env.example .env
 
 | Variable | Required | Description |
 |---|---|---|
-| `QDRANT_ENDPOINT` | ✅ | Qdrant Cloud cluster URL |
-| `QDRANT_API_KEY` | ✅ | Qdrant API key |
-| `QDRANT_COLLECTION` | optional | Collection name (default: `text-embedding-3-large`) |
-| `OPENAI_API_KEY` | ✅ | For `text-embedding-3-large` embeddings |
-| `ANTHROPIC_API_KEY` | ✅ | For Claude Haiku (classifier) + Claude Sonnet (Q&A) |
+| `QDRANT_URL` | live runs | Qdrant Cloud cluster URL |
+| `QDRANT_API_KEY_RO` | live runs | Read-only Qdrant API key |
+| `QDRANT_COLLECTION_NAME` | optional | Collection name (default: `movies`) |
+| `OPENAI_API_KEY` | live runs | OpenAI embeddings for RAG queries |
+| `ANTHROPIC_API_KEY` | live runs | Claude models for confirmation, refinement, and Q&A |
 | `CLASSIFIER_MODEL` | optional | Default: `claude-haiku-4-5-20251001` |
 | `REASONING_MODEL` | optional | Default: `claude-sonnet-4-6` |
 | `RAG_TOP_K` | optional | Qdrant result count (default: `8`) |
 | `MAX_REFINEMENTS` | optional | Max refinement cycles before dead-end (default: `3`) |
-| `CONFIDENCE_THRESHOLD` | optional | Min IMDb match confidence (default: `0.3`) |
-| `LANGCHAIN_TRACING_V2` | optional | `true` to enable LangSmith tracing |
-| `LANGCHAIN_API_KEY` | optional | LangSmith API key |
-| `LANGCHAIN_PROJECT` | optional | LangSmith project name (default: `movie-finder`) |
+| `CONFIDENCE_THRESHOLD` | optional | Minimum IMDb match confidence (default: `0.3`) |
+| `LANGSMITH_TRACING` | optional | `true` to enable LangSmith tracing |
+| `LANGSMITH_API_KEY` | optional | LangSmith API key |
+| `LANGSMITH_PROJECT` | optional | LangSmith project name (default: `movie-finder`) |
 
-> **Note**: `QDRANT_COLLECTION` must match the embedding model used during
-> `rag_ingestion` (default: `text-embedding-3-large`).
+`make test` and `make test-coverage` do not require live Qdrant or LLM
+credentials because the test suite fully stubs those integrations.
+
+`QDRANT_API_KEY_RW` is intentionally absent from this repo. The chain is a
+read-only Qdrant consumer and never writes to the collection.
 
 ---
 
@@ -223,15 +239,8 @@ All tests run without real API calls (OpenAI, IMDB, Qdrant, Anthropic are
 all mocked via `unittest.mock`).
 
 ```bash
-# Run all tests with coverage
-cd backend/chain
-uv run pytest --cov=chain --cov-report=term-missing
-
-# Run a specific module
-uv run pytest tests/test_nodes.py -v
-
-# Run only routing logic (fast, no mocking needed)
-uv run pytest tests/test_graph.py -v
+make test
+make test-coverage
 ```
 
 ### Test coverage targets
@@ -247,47 +256,37 @@ uv run pytest tests/test_graph.py -v
 
 ## Development
 
-### Pre-commit hooks
+Use the repo-local Docker targets for all quality checks:
 
 ```bash
-pip install pre-commit
-pre-commit install
-pre-commit run --all-files   # run once to check existing code
+make lint
+make format
+make typecheck
+make pre-commit
+make check
 ```
 
 Hooks: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`,
 `detect-private-key`, `detect-secrets`, `ruff-check --fix`, `ruff-format`,
 `mypy`.
 
-### Linting & type checking
+### Examples
 
 ```bash
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run mypy src/
+make example-basic
+make example-streaming
 ```
 
 ---
 
-## Docker
+## Container workflow
 
-### Build and run the chain service
+`make dev` starts a persistent `chain` container for attached-container
+editing, interactive debugging, and ad hoc shell access via `make shell`.
 
-```bash
-docker compose up --build
-```
-
-The `docker-compose.yml` spins up:
-- A local **Qdrant** instance (port `6333`) for development
-- The **chain** container (ready for use as a library or test runner)
-
-Environment variables are loaded from the root `.env` file.
-
-### Build the image standalone
-
-```bash
-docker build -t movie-finder-chain .
-```
+`docker-compose.yml` intentionally defines only the `chain` container. Qdrant
+remains external-only; this repo no longer ships or documents a local Qdrant
+developer flow.
 
 ---
 
@@ -297,13 +296,13 @@ Set the following environment variables to enable end-to-end tracing in
 [LangSmith](https://smith.langchain.com):
 
 ```env
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=<your key>
-LANGCHAIN_PROJECT=movie-finder
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_API_KEY=<your key>
+LANGSMITH_PROJECT=movie-finder
 ```
 
-LangChain/LangGraph picks these up automatically.  Each graph invocation
+The graph mirrors these to the legacy `LANGCHAIN_*` aliases automatically. Each graph invocation
 produces a run trace showing all nodes, LLM calls, tool invocations, and
 their latencies.
 

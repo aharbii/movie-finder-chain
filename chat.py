@@ -6,10 +6,12 @@ Runs the full three-phase LangGraph pipeline:
   2. Confirmation — pick your movie (or say "none of these" to refine)
   3. Q&A         — ask anything about the confirmed movie
 
-Usage (run from backend/ root — chain depends on imdbapi via workspace):
+Usage (Docker-only local workflow):
 
-    uv run python chain/chat.py
-    uv run python chain/chat.py --env chain/.env
+    make dev
+    make shell
+    python chat.py
+    python chat.py --env .env
 
 Commands during chat:
     new / restart  — start a fresh conversation (clears session)
@@ -23,6 +25,9 @@ import sys
 import uuid
 import warnings
 from pathlib import Path
+from typing import cast
+
+from langgraph.graph.graph import CompiledGraph
 
 warnings.filterwarnings("ignore", message="Core Pydantic V1 functionality", category=UserWarning)
 
@@ -46,14 +51,14 @@ load_dotenv(_parse_env_arg())
 from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
 
 from chain.graph import compile_graph  # noqa: E402
-
+from chain.state import MovieFinderState  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _last_ai_message(state: dict) -> str:
+def _last_ai_message(state: MovieFinderState) -> str:
     for msg in reversed(state.get("messages", [])):
         if isinstance(msg, AIMessage):
             return msg.content if isinstance(msg.content, str) else str(msg.content)
@@ -73,7 +78,7 @@ def _phase_badge(phase: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def chat_loop(graph, thread_id: str) -> str | None:
+async def chat_loop(graph: CompiledGraph, thread_id: str) -> str | None:
     """
     Run one conversation session. Returns "new" if user wants a fresh session,
     or None if user wants to quit entirely.
@@ -106,9 +111,12 @@ async def chat_loop(graph, thread_id: str) -> str | None:
         # ---- Invoke graph ----
         print("\n  ⏳ Thinking...")
         try:
-            state = await graph.ainvoke(
-                {"messages": [HumanMessage(content=user_input)]},
-                config=config,
+            state = cast(
+                MovieFinderState,
+                await graph.ainvoke(
+                    {"messages": [HumanMessage(content=user_input)]},
+                    config=config,
+                ),
             )
         except Exception as e:
             print(f"\n  ❌ Error: {e}\n")
@@ -128,7 +136,9 @@ async def chat_loop(graph, thread_id: str) -> str | None:
         # ---- Phase-specific hints ----
         if phase == "confirmation":
             candidates = state.get("enriched_movies", [])
-            print(f"  💡 {len(candidates)} candidate(s) found. Pick a number or say \"none of these\".\n")
+            print(
+                f'  💡 {len(candidates)} candidate(s) found. Pick a number or say "none of these".\n'
+            )
         elif phase == "qa":
             title = state.get("confirmed_movie_title", "")
             imdb_id = state.get("confirmed_movie_id", "")
@@ -160,7 +170,7 @@ async def main() -> None:
     print("    3️⃣  Ask anything about it  → cast, rating, box office, ...\n")
     print("  Commands: 'new' = fresh session | 'quit' = exit\n")
 
-    signal = "new"
+    signal: str | None = "new"
     while signal == "new":
         thread_id = str(uuid.uuid4())
         signal = await chat_loop(graph, thread_id)
