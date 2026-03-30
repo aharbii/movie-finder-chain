@@ -17,7 +17,7 @@
 #   make ci-down        Hard cleanup for CI agents (volumes + local images)
 # =============================================================================
 
-.PHONY: help init up dev down editor-up editor-down shell lint format typecheck \
+.PHONY: help init up dev down editor-up editor-down logs shell lint format typecheck \
 	test test-coverage pre-commit ci-down check
 
 .DEFAULT_GOAL := help
@@ -40,6 +40,7 @@ help:
 	@echo "    down             Stop the dev container"
 	@echo "    editor-up        Start a headless container for IDE attachment"
 	@echo "    editor-down      Stop the IDE-attached container"
+	@echo "    logs             Tail logs from the running container"
 	@echo "    shell            Open a shell in the running container"
 	@echo ""
 	@echo "  Quality"
@@ -75,11 +76,14 @@ editor-up:
 
 editor-down: down
 
+logs:
+	$(COMPOSE) logs -f $(SERVICE)
+
 shell:
 	@if $(COMPOSE) ps --services --status running | grep -qx "$(SERVICE)"; then \
-		$(COMPOSE) exec $(SERVICE) sh; \
+		$(COMPOSE) exec $(SERVICE) zsh; \
 	else \
-		$(COMPOSE) run --rm $(SERVICE) sh; \
+		$(COMPOSE) run --rm $(SERVICE) zsh; \
 	fi
 
 lint:
