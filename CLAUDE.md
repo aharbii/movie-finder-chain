@@ -122,15 +122,8 @@ uv run pre-commit install    # once per clone
 uv run pre-commit run --all-files
 ```
 
-| Hook | Notes |
-|---|---|
-| `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-case-conflict`, `check-merge-conflict` | File health |
-| `check-added-large-files`, `check-illegal-windows-names`, `detect-private-key` | Safety |
-| `detect-secrets` | No API keys or tokens |
-| `mypy` (strict, extra deps: `pydantic`, `pydantic-settings`) | Type checking |
-| `ruff-check --fix`, `ruff-format` | Linting and formatting |
-
-**Never `--no-verify`.** False-positive → `# pragma: allowlist secret` + `detect-secrets scan > .secrets.baseline`.
+Hooks: whitespace/YAML/safety checks, `detect-secrets`, `mypy --strict` (pydantic deps), `ruff-check --fix`, `ruff-format`. **Never `--no-verify`.**
+False positive → `# pragma: allowlist secret` + `detect-secrets scan > .secrets.baseline`.
 
 ---
 
@@ -189,55 +182,20 @@ Conventional Commits: `feat(chain): add Gemini embedding support`
 
 ## Cross-cutting change checklist
 
-### 1. GitHub issues
-- [ ] `aharbii/movie-finder` (parent)
-- [ ] `aharbii/movie-finder-chain` linked child issue only if this repo changes
-- [ ] Matching issue/PR templates and a recent example were inspected before filing or editing
+Full detail in `ai-context/issue-agent-briefing-template.md`.
 
-### 2. Branch
-- [ ] Branch in this repo + `chore/` in `backend/` and root `movie-finder`
-- [ ] New standalone issues branch from `main` unless stacking is explicitly requested
-
-### 3. ADR
-- [ ] New LLM provider, new embedding model, new external dependency, or pipeline architecture change?
-  → Write `docs/architecture/decisions/ADR-NNN-title.md`
-
-### 4. Implementation and tests
-- [ ] New node or provider follows the established patterns (see above)
-- [ ] `MovieFinderState` fields accessed safely with `.get()` (issue #15 still open)
-- [ ] `ruff` + `mypy --strict` pass
-- [ ] Pre-commit hooks pass
-- [ ] `pytest --asyncio-mode=auto` passes
-
-### 5. Environment and secrets
-- [ ] `.env.example` updated in: **this repo**, `backend/`, `backend/rag_ingestion/` (if embedding model changes), root `movie-finder`
-- [ ] New API keys flagged for:
-  - Azure Key Vault
-  - Jenkins credentials store
-  - `docs/devops-setup.md` credentials table updated
-- [ ] Chain tuning params (`RAG_TOP_K`, `MAX_REFINEMENTS`, `CONFIDENCE_THRESHOLD`, etc.) updated if defaults change
-
-### 6. Docker
-- [ ] `Dockerfile` updated (built from workspace root context — includes `imdbapi/` and `chain/`)
-- [ ] `docker-compose.yml` updated if needed
-- [ ] Root `docker-compose.yml` if service interface changed
-
-### 7. CI — Jenkins
-- [ ] `.github/workflows/*.yml` and/or `Jenkinsfile` reviewed — new credentials, permissions, or env vars?
-- [ ] LangSmith project name consistent between CI credentials and `.env.example`
-
-### 8. Architecture diagrams (in `docs/` submodule)
-- [ ] **PlantUML** — `04-langgraph-pipeline.puml` and/or `05-langgraph-statemachine.puml` for pipeline changes; `09-seq-langgraph-execution.puml` for sequence changes
-  **Never generate `.mdj`** — user syncs to StarUML manually
-- [ ] **Structurizr C4** — `workspace.dsl` if new external system or container added
-- [ ] Commit to `aharbii/movie-finder-docs` first
-
-### 9. Documentation
-- [ ] `docs/` pages (pipeline description, node reference, LangSmith setup)
-- [ ] `README.md` updated
-- [ ] `CHANGELOG.md` under `[Unreleased]`
-- [ ] OpenAPI: chain changes may affect `app/` SSE event shape — verify `/docs`
-- [ ] Contributor docs updated when CI, required checks, or merge policy change
+| # | Category | Key gate |
+|---|---|---|
+| 1 | **Issues** | Parent `aharbii/movie-finder` + child here only if this repo changes; templates inspected |
+| 2 | **Branch** | `feature/fix/chore/docs` in this repo + pointer-bump `chore/` in `backend/` and root |
+| 3 | **ADR** | New LLM provider, embedding model, external dep, or pipeline architecture → ADR in `docs/` |
+| 4 | **Implementation** | State machine / Pure functions / Strategy / Factory patterns; `MovieFinderState` fields via `.get()` (#15); `ruff`+`mypy --strict` pass; pre-commit pass |
+| 5 | **Tests** | `pytest --asyncio-mode=auto` passes; coverage doesn't regress |
+| 6 | **Env & secrets** | `.env.example` updated here + `backend/` + `rag_ingestion/` if embedding changes + root; tuning params updated; new keys → Key Vault + Jenkins |
+| 7 | **Docker** | `Dockerfile` updated (workspace root context includes `imdbapi/` + `chain/`); compose updated |
+| 8 | **CI** | `Jenkinsfile` reviewed; LangSmith project name consistent with CI creds |
+| 9 | **Diagrams** | `04-langgraph-pipeline.puml`, `05-langgraph-statemachine.puml`, `09-seq-langgraph-execution.puml`; `workspace.dsl` if C4 changed; commit to `docs/` first; **never `.mdj`** |
+| 9a | **Docs** | `docs/` pages updated; SSE event shape change → verify `/docs` at `app/`; `README.md` + `CHANGELOG.md` updated |
 
 ### 10. Sibling submodules likely affected
 | Submodule | Why |
