@@ -1,65 +1,62 @@
-# Movie Finder Chain — Development Docker Compose
+# =============================================================================
+# movie-finder-chain — Docker-only local development container
 #
-# Services:
-#   qdrant   — local Qdrant instance for development / integration tests
-#   chain    — chain package (import-check + test runner)
+# Scope of this compose file:
+#   - `chain` service for attached-container editing and one-off repo targets
 #
-# Usage:
-#   docker compose up                       # start qdrant + smoke-test chain
-#   docker compose run chain pytest tests/  # run the test suite
-#   docker compose run chain uv run python examples/basic_usage.py
-#
-# Environment variables are loaded from the project-root .env file.
-# Copy .env.example → .env and fill in API keys before running.
+# Deliberately excluded:
+#   - Local Qdrant (Qdrant is always external)
+#   - Backend app lifecycle (owned by movie-finder-backend)
+# =============================================================================
+
+name: movie-finder-chain-local
 
 services:
-
-  # ------------------------------------------------------------------
-  # Qdrant — vector store (development / CI only)
-  # Production uses Qdrant Cloud; this service is for local development.
-  # ------------------------------------------------------------------
-  qdrant:
-    image: qdrant/qdrant:v1.13.0
-    container_name: movie-finder-qdrant-dev
-    ports:
-      - "6333:6333"
-      - "6334:6334"   # gRPC port
-    volumes:
-      - qdrant_data:/qdrant/storage
-    environment:
-      QDRANT__SERVICE__GRPC_PORT: "6334"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-
-  # ------------------------------------------------------------------
-  # Chain — library smoke-test / test runner
-  # ------------------------------------------------------------------
   chain:
     build:
-      context: ..        # backend/ — needs access to both imdbapi/ and chain/
+      context: ..
       dockerfile: chain/Dockerfile
-    container_name: movie-finder-chain
-    env_file:
-      - .env             # chain-local .env (copy from .env.example)
+      target: dev
+    image: movie-finder-chain:dev
+    working_dir: /workspace/chain
+    command: ["sleep", "infinity"]
     environment:
-      # Override Qdrant endpoint to use the local container in dev
-      QDRANT_ENDPOINT: "http://qdrant:6333"
-      QDRANT_API_KEY: ""   # no key needed for local Qdrant
-    depends_on:
-      qdrant:
-        condition: service_healthy
+      # --- Qdrant ---
+      QDRANT_URL: ${QDRANT_URL:-}
+      QDRANT_API_KEY_RO: ${QDRANT_API_KEY_RO:-}
+      QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-movies}
+      # --- LLM Providers ---
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # --- Models ---
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-3072}
+      CLASSIFIER_MODEL: ${CLASSIFIER_MODEL:-claude-haiku-4-5-20251001}
+      REASONING_MODEL: ${REASONING_MODEL:-claude-sonnet-4-6}
+      # --- LangSmith ---
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-movie-finder}
+      # --- Pipeline Logic ---
+      RAG_TOP_K: ${RAG_TOP_K:-8}
+      MAX_REFINEMENTS: ${MAX_REFINEMENTS:-3}
+      IMDB_SEARCH_LIMIT: ${IMDB_SEARCH_LIMIT:-3}
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.3}
+      # --- Logging ---
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # --- Shell ---
+      SHELL: /bin/zsh
     volumes:
-      # Mount source for live-reload during development
-      - ./src:/app/src:ro
-      - ./tests:/app/tests:ro
+      - .:/workspace/chain:cached
+      - ../imdbapi:/workspace/imdbapi:cached
+      - uv_cache:/root/.cache/uv
+      - pre_commit_cache:/root/.cache/pre-commit
+    stdin_open: true
+    tty: true
+    init: true
     restart: "no"
 
-
 volumes:
-  qdrant_data:
-    name: movie-finder-qdrant-data
+  uv_cache:
+  pre_commit_cache:

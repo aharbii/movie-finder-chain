@@ -3,62 +3,50 @@
 The graph is event-driven: every user message triggers a new `graph.ainvoke()`
 call (same thread_id). The `phase` field drives which branch executes.
 
-Phase lifecycle
----------------
-"discovery"    → initial state; RAG search + IMDB enrichment runs.
-"confirmation" → candidates have been presented; waiting for user to confirm.
-"qa"           → movie is confirmed; open-ended Q&A loop with IMDB agent.
-
-next_action (set by confirmation_node, read by the confirmation router)
----------------------------------------------------------------------------
-"wait"        → response was unclear; re-present or ask for clarification.
-"confirmed"   → user identified their movie; move to Q&A.
-"refine"      → user said the movie isn't there; run another RAG search.
-"exhausted"   → max refinements reached; inform user and end.
+Phase lifecycle:
+    discovery -> confirmation -> qa
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from operator import add
+from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
 
 
-class MovieFinderState(TypedDict, total=False):
-    """Complete mutable state for the Movie Finder LangGraph graph.
+class MovieFinderState(TypedDict):
+    """The complete state schema for the Movie Finder LangGraph.
 
-    All fields default to falsy values so nodes only need to return the
-    keys they actually changed.
+    Attributes:
+        messages: Conversation history (Human/AI/Tool messages).
+            Annotated with `add` so new updates are appended, not overwritten.
+        phase: Current pipeline stage. Controls the entry router.
+        next_action: Set by the confirmation node to drive routing.
+        user_plot_query: The current refined plot description.
+        refinement_count: How many times we've looped back to search.
+        rag_candidates: Raw hits from the vector store.
+        enriched_movies: RAG hits augmented with IMDb metadata and confidence.
+        confirmed_movie_id: IMDb title ID of the final selection.
+        confirmed_movie_title: Human-readable title of the selection.
+        confirmed_movie_data: Full record for Q&A context injection.
     """
 
-    # ------------------------------------------------------------------ #
-    # Conversation history — uses add_messages reducer (append-only)
-    # ------------------------------------------------------------------ #
-    messages: Annotated[list[BaseMessage], add_messages]
+    # --- Conversation history ---
+    # `add` ensures new messages are appended to existing ones.
+    messages: Annotated[list[BaseMessage], add]
 
-    # ------------------------------------------------------------------ #
-    # Phase and routing control
-    # ------------------------------------------------------------------ #
-    phase: str  # "discovery" | "confirmation" | "qa"
-    next_action: str  # "wait" | "confirmed" | "refine" | "exhausted"
+    # --- State machine control ---
+    phase: Literal["discovery", "confirmation", "qa"]
+    next_action: Literal["confirmed", "refine", "exhausted", "wait"] | None
+
+    # --- Discovery pipeline data ---
+    user_plot_query: str | None
     refinement_count: int
+    rag_candidates: list[dict[str, Any]]
+    enriched_movies: list[dict[str, Any]]
 
-    # ------------------------------------------------------------------ #
-    # RAG discovery
-    # ------------------------------------------------------------------ #
-    user_plot_query: str  # current plot description used for RAG
-    rag_candidates: list[dict[str, Any]]  # raw Movie dicts from Qdrant
-
-    # ------------------------------------------------------------------ #
-    # IMDB enrichment + validation
-    # ------------------------------------------------------------------ #
-    enriched_movies: list[dict[str, Any]]  # RAG + IMDB merged, sorted by confidence
-
-    # ------------------------------------------------------------------ #
-    # Confirmed movie (set after user confirms)
-    # ------------------------------------------------------------------ #
+    # --- Confirmation / Q&A data ---
     confirmed_movie_id: str | None  # IMDb title ID, e.g. "tt1375666"
     confirmed_movie_title: str | None  # Human-readable title
     confirmed_movie_data: dict[str, Any] | None  # Full enriched record for Q&A context

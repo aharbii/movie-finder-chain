@@ -1,3 +1,9 @@
+# =============================================================================
+# movie-finder-chain — Git pre-commit hooks configuration
+#
+# These hooks are mirrored in the Docker development container via the Makefile.
+# =============================================================================
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -5,21 +11,28 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: ^\.vscode/  # VSCode config files use JSONC (comments allowed)
+      - id: check-ast
       - id: check-added-large-files
       - id: check-case-conflict
       - id: check-illegal-windows-names
       - id: check-merge-conflict
+      - id: debug-statements
       - id: detect-private-key
 
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
+        exclude: .env.example
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.5.0
     hooks:
       - id: mypy
+        language_version: python3.13
         additional_dependencies:
           - pydantic
           - pydantic-settings
@@ -30,7 +43,6 @@ repos:
           - --warn-return-any
           - --warn-unused-ignores
           - --show-error-codes
-        exclude: ^tests/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.13

@@ -22,24 +22,24 @@ class MovieSearchService:
     """Synchronous search service.
 
     Synchronous because both the OpenAI client (sync variant) and the
-    qdrant-client default interface are synchronous.  Callers in async
+    qdrant-client default interface are synchronous. Callers in async
     nodes should wrap with ``asyncio.to_thread``.
-
-    Parameters
-    ----------
-    config:
-        ``ChainConfig`` instance (injected so callers can pass a mock in tests).
     """
 
     def __init__(self, config: ChainConfig) -> None:
-        self._collection = config.qdrant_collection
+        """Initialize the search service.
+
+        Args:
+            config: ``ChainConfig`` instance (injected so callers can pass a mock in tests).
+        """
+        self._collection = config.qdrant_collection_name
         self._embedding_model = config.embedding_model
         self.logger = get_logger(self.__class__.__name__)
 
         self._openai = OpenAI(api_key=config.openai_api_key)
         self._qdrant = QdrantClient(
-            url=config.qdrant_endpoint,
-            api_key=config.qdrant_api_key,
+            url=config.qdrant_url,
+            api_key=config.qdrant_api_key_ro,
         )
 
     # ------------------------------------------------------------------
@@ -49,17 +49,12 @@ class MovieSearchService:
     def search(self, query: str, top_k: int = 8) -> list[RagCandidate]:
         """Embed *query* and return the top-*k* closest movie candidates.
 
-        Parameters
-        ----------
-        query:
-            Natural-language plot description from the user.
-        top_k:
-            Maximum number of results to return.
+        Args:
+            query: Natural-language plot description from the user.
+            top_k: Maximum number of results to return.
 
-        Returns
-        -------
-        list[RagCandidate]
-            Ordered by cosine similarity (closest first).
+        Returns:
+            List of RagCandidate ordered by cosine similarity (closest first).
         """
         vector = self._embed(query)
         return self._search_qdrant(vector, top_k)
@@ -69,6 +64,14 @@ class MovieSearchService:
     # ------------------------------------------------------------------
 
     def _embed(self, text: str) -> list[float]:
+        """Generate embedding vector for text.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of floats representing the embedding.
+        """
         response = self._openai.embeddings.create(
             input=text,
             model=self._embedding_model,
@@ -77,6 +80,15 @@ class MovieSearchService:
         return list(response.data[0].embedding)
 
     def _search_qdrant(self, vector: list[float], top_k: int) -> list[RagCandidate]:
+        """Query Qdrant for similar vectors.
+
+        Args:
+            vector: The query vector.
+            top_k: Number of results.
+
+        Returns:
+            List of RagCandidate.
+        """
         results = self._qdrant.query_points(
             collection_name=self._collection,
             query=vector,
@@ -122,7 +134,14 @@ class MovieSearchService:
 
 
 def _to_list(value: object) -> list[str]:
-    """Convert a string or list stored in Qdrant payload to a plain list."""
+    """Convert a string or list stored in Qdrant payload to a plain list.
+
+    Args:
+        value: The value from Qdrant payload.
+
+    Returns:
+        A list of strings.
+    """
     if isinstance(value, list):
         return [str(v) for v in value]
     if isinstance(value, str):

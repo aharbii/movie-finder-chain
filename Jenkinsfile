@@ -13,7 +13,7 @@
 // =============================================================================
 
 pipeline {
-    agent none  // Each stage defines its own Docker agent
+    agent any
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '20'))
@@ -22,53 +22,44 @@ pipeline {
     }
 
     environment {
-        SERVICE_NAME    = 'movie-finder-chain'
-        UV_IMAGE        = 'ghcr.io/astral-sh/uv:python3.13-bookworm-slim'
-        DOCKER_IMAGE    = 'docker:24-dind'
+        SERVICE_NAME = 'movie-finder-chain'
     }
 
     stages {
 
         // ------------------------------------------------------------------ //
-        stage('Lint') {
-            agent {
-                docker {
-                    image "${UV_IMAGE}"
-                    // Workspace root is the build context for chain (workspace member).
-                    // Mount docker socket so Docker build can run in Build stage.
-                    args '--mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock'
-                }
-            }
+        stage('Initialize') {
             steps {
-                // chain is a workspace member — install from workspace root
-                sh 'uv sync --frozen --group lint'
-                sh 'uv run ruff check chain/src/ chain/tests/'
-                sh 'uv run ruff format --check chain/src/ chain/tests/'
-                sh 'uv run mypy chain/src/'
+                // Ensure .env exists for docker-compose (even if empty in CI)
+                sh 'make init'
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        stage('Quality') {
+            parallel {
+                stage('Lint') {
+                    steps {
+                        sh 'make lint'
+                    }
+                }
+                stage('Typecheck') {
+                    steps {
+                        sh 'make typecheck'
+                    }
+                }
             }
         }
 
         // ------------------------------------------------------------------ //
         stage('Test') {
-            agent {
-                docker {
-                    image "${UV_IMAGE}"
-                }
-            }
             steps {
-                sh 'uv sync --frozen --group test'
-                sh '''
-                    uv run pytest chain/tests/ \
-                        --cov=chain/src \
-                        --cov-report=xml:coverage.xml \
-                        --junitxml=test-results.xml \
-                        -v --tb=short
-                '''
+                sh 'make test-coverage'
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: 'test-results.xml'
-                    cobertura coberturaReportFile: 'coverage.xml',
+                    // Assuming coverage XML name from Makefile: chain-coverage.xml
+                    cobertura coberturaReportFile: 'chain-coverage.xml',
                               onlyStable: false,
                               failNoReports: false
                 }
@@ -84,22 +75,15 @@ pipeline {
                     buildingTag()
                 }
             }
-            agent {
-                docker {
-                    image "${DOCKER_IMAGE}"
-                    args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
             environment {
                 DOCKER_REGISTRY = credentials('docker-registry-url')
                 IMAGE_TAG = "${DOCKER_REGISTRY}/${SERVICE_NAME}:${env.GIT_TAG_NAME ?: env.GIT_COMMIT.take(8)}"
             }
             steps {
-                // Build from workspace root — Dockerfile needs imdbapi/ and chain/
-                sh "docker build -f chain/Dockerfile -t ${IMAGE_TAG} ."
+                // Build using the repo-local Dockerfile
+                sh "docker build -t ${IMAGE_TAG} ."
                 sh "docker push ${IMAGE_TAG}"
 
-                // Also tag as 'latest' on main branch
                 script {
                     if (env.BRANCH_NAME == 'main') {
                         sh "docker tag ${IMAGE_TAG} ${DOCKER_REGISTRY}/${SERVICE_NAME}:latest"
@@ -113,6 +97,8 @@ pipeline {
 
     post {
         always {
+            // Standard cleanup target
+            sh 'make ci-down'
             cleanWs()
         }
         failure {

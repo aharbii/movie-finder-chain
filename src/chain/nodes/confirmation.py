@@ -28,11 +28,16 @@ from chain.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_PROMPT_PATH = importlib.resources.files("chain") / "../../prompts/confirmation.md"
-
 
 async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
-    """Classify the user's confirmation response and route accordingly."""
+    """Classify the user's confirmation response and route accordingly.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        Partial state update with next_action, and potentially confirmed_movie fields.
+    """
     cfg = get_config()
     messages: list[BaseMessage] = state.get("messages", [])
     movies: list[dict[str, Any]] = state.get("enriched_movies", [])
@@ -133,6 +138,14 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
 
 
 def _last_human_text(messages: list[BaseMessage]) -> str:
+    """Extract the text of the last human message.
+
+    Args:
+        messages: The list of conversation messages.
+
+    Returns:
+        The content of the last human message, or empty string.
+    """
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage) and isinstance(msg.content, str):
             return msg.content
@@ -140,6 +153,14 @@ def _last_human_text(messages: list[BaseMessage]) -> str:
 
 
 def _format_candidates(movies: list[dict[str, Any]]) -> str:
+    """Format the list of candidates for the LLM prompt.
+
+    Args:
+        movies: The list of enriched movie records.
+
+    Returns:
+        A numbered string list of candidates.
+    """
     if not movies:
         return "(no candidates)"
     lines = []
@@ -151,6 +172,11 @@ def _format_candidates(movies: list[dict[str, Any]]) -> str:
 
 
 def _load_prompt() -> str:
+    """Load the confirmation prompt template.
+
+    Returns:
+        The prompt template string.
+    """
     try:
         return (
             importlib.resources.files("chain.prompts")

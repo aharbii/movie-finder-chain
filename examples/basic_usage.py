@@ -8,22 +8,16 @@ Demonstrates the three-phase conversation loop:
 
 Prerequisites
 -------------
-Install dependencies::
+Create and populate a chain-local `.env` file (copy from `.env.example`)::
 
-    cd backend
-    uv sync --all-packages
-
-Create and populate a .env file (copy from .env.example)::
-
-    cp ../../.env.example ../../.env
-    # Fill in: QDRANT_ENDPOINT, QDRANT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY
+    cp .env.example .env
+    # Fill in: QDRANT_URL, QDRANT_API_KEY_RO, OPENAI_API_KEY, ANTHROPIC_API_KEY
 
 Ensure Qdrant is populated by running rag_ingestion first.
 
 Run::
 
-    cd backend
-    uv run python chain/examples/basic_usage.py
+    make example-basic
 """
 
 from __future__ import annotations
@@ -44,12 +38,13 @@ warnings.filterwarnings(
 from dotenv import load_dotenv  # noqa: E402
 from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../../.env"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../.env"))
 
 from chain.graph import compile_graph  # noqa: E402  (after load_dotenv)
+from chain.state import MovieFinderState  # noqa: E402
 
 
-def _last_ai_message(state: dict) -> str:
+def _last_ai_message(state: MovieFinderState) -> str:
     """Extract the text of the last AIMessage from state."""
     for msg in reversed(state.get("messages", [])):
         if isinstance(msg, AIMessage):

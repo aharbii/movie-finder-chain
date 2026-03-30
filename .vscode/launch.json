@@ -1,38 +1,44 @@
 {
   "version": "0.2.0",
   "configurations": [
-    // ── Interactive chain runner ────────────────────────────────────────────
+    // ── Chain workflows (attached container) ───────────────────────────────
+    // Start `make dev`, then attach VS Code to the running `chain` container.
+    // These launch configs assume the attached-container interpreter at
+    // /opt/venv/bin/python and the chain workspace folder opened at /workspace/backend/chain.
     {
-      "name": "chain: run chat.py (interactive)",
+      "name": "chain: run chat.py (attached container)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/chat.py",
       "envFile": "${workspaceFolder}/.env",
-      "python": "${workspaceFolder}/../.venv/bin/python",
+      "python": "/opt/venv/bin/python",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "justMyCode": false
     },
 
     // ── pytest ──────────────────────────────────────────────────────────────
     {
-      "name": "pytest: All tests",
+      "name": "pytest: all tests (attached container)",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": ["tests/", "--asyncio-mode=auto", "-v"],
       "envFile": "${workspaceFolder}/.env",
-      "python": "${workspaceFolder}/../.venv/bin/python",
-      "cwd": "${workspaceFolder}"
+      "python": "/opt/venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
     },
     {
-      "name": "pytest: Current file",
+      "name": "pytest: current file (attached container)",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": ["${file}", "--asyncio-mode=auto", "-v"],
       "envFile": "${workspaceFolder}/.env",
-      "python": "${workspaceFolder}/../.venv/bin/python",
-      "cwd": "${workspaceFolder}"
+      "python": "/opt/venv/bin/python",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
     }
   ]
 }

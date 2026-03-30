@@ -30,28 +30,13 @@ phase="qa"
 
 Set the following env vars to enable tracing:
 
-    LANGCHAIN_TRACING_V2=true
-    LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-    LANGCHAIN_API_KEY=<your key>
-    LANGCHAIN_PROJECT=movie-finder
+    LANGSMITH_TRACING=true
+    LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+    LANGSMITH_API_KEY=<your key>
+    LANGSMITH_PROJECT=movie-finder
 
-LangChain/LangGraph picks these up automatically on import.
-
-## FastAPI integration (future)
-
-    graph = compile_graph()
-
-    @app.post("/chat/{session_id}")
-    async def chat(session_id: str, body: ChatRequest):
-        config = {"configurable": {"thread_id": session_id}}
-        result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=body.message)]},
-            config=config,
-        )
-        last_ai = next(
-            (m for m in reversed(result["messages"]) if isinstance(m, AIMessage)), None
-        )
-        return {"reply": last_ai.content if last_ai else ""}
+The graph mirrors these to the legacy `LANGCHAIN_*` aliases at runtime so
+LangChain/LangGraph tracing still activates automatically.
 """
 
 from __future__ import annotations
@@ -84,7 +69,14 @@ from chain.state import MovieFinderState
 def _route_by_phase(
     state: MovieFinderState,
 ) -> Literal["rag_search", "confirmation", "qa_agent"]:
-    """Entry router: pick the first node to execute based on current phase."""
+    """Entry router: pick the first node to execute based on current phase.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        The name of the next node to execute.
+    """
     phase = state.get("phase") or "discovery"
     if phase == "confirmation":
         return "confirmation"
@@ -96,7 +88,14 @@ def _route_by_phase(
 def _route_after_confirmation(
     state: MovieFinderState,
 ) -> Literal["qa_agent", "refinement", "dead_end", "__end__"]:
-    """Post-confirmation router: where to go based on next_action."""
+    """Post-confirmation router: where to go based on next_action.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        The name of the next node or __end__.
+    """
     action = state.get("next_action") or "wait"
     if action == "confirmed":
         return "qa_agent"
@@ -152,40 +151,21 @@ def _apply_langsmith_env() -> None:
 def compile_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledGraph:
     """Build and compile the Movie Finder LangGraph graph.
 
-    Parameters
-    ----------
-    checkpointer:
-        A LangGraph ``BaseCheckpointSaver`` instance for multi-turn memory.
-        Defaults to an in-memory ``MemorySaver``.  For production, pass a
-        Redis- or Postgres-backed saver.
+    Args:
+        checkpointer: A LangGraph ``BaseCheckpointSaver`` instance for multi-turn memory.
+            Defaults to an in-memory ``MemorySaver``. For production, pass a
+            Redis- or Postgres-backed saver.
 
-    Returns
-    -------
-    CompiledGraph
-        Ready for ``.ainvoke()`` / ``.astream()``.
+    Returns:
+        CompiledGraph: Ready for ``.ainvoke()`` / ``.astream()``.
 
-    Example
-    -------
-    ::
-
+    Example:
         graph = compile_graph()
         config = {"configurable": {"thread_id": "session-abc"}}
 
         # First turn — discovery
         await graph.ainvoke(
             {"messages": [HumanMessage("A heist movie where they steal dreams")]},
-            config=config,
-        )
-
-        # Second turn — user confirms
-        await graph.ainvoke(
-            {"messages": [HumanMessage("Yes! It's number 1")]},
-            config=config,
-        )
-
-        # Third turn — Q&A
-        await graph.ainvoke(
-            {"messages": [HumanMessage("Is it safe for a 12-year-old?")]},
             config=config,
         )
     """

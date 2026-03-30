@@ -1,12 +1,22 @@
 {
+  // Recommended extensions for the movie-finder-chain workspace.
+  // Install all via: Extensions › ... › Show Recommended Extensions
   "recommendations": [
+    // Remote development — attach to the running chain container
+    "ms-vscode-remote.remote-containers",
+    // Python toolchain
     "ms-python.python",
+    "ms-python.vscode-pylance",
     "ms-python.debugpy",
-    "charliermarsh.ruff",
     "ms-python.mypy-type-checker",
+    "charliermarsh.ruff",
+    // Config file support
     "tamasfe.even-better-toml",
     "redhat.vscode-yaml",
+    // Developer productivity
     "eamodio.gitlens",
+    "ryanluker.vscode-coverage-gutters",
+    "ms-vscode.makefile-tools",
     "streetsidesoftware.code-spell-checker"
   ]
 }

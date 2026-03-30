@@ -2,38 +2,65 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "lint",
+      "label": "chain: dev",
       "type": "shell",
-      "command": "cd .. && uv run ruff check chain/ && uv run mypy chain/src/",
+      "command": "make dev",
+      "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "chain: lint",
+      "type": "shell",
+      "command": "make lint",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "format",
+      "label": "chain: format",
       "type": "shell",
-      "command": "cd .. && uv run ruff format chain/",
-      "group": "build",
+      "command": "make format",
+      "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "test",
+      "label": "chain: typecheck",
       "type": "shell",
-      "command": "cd .. && uv run pytest chain/tests/ --asyncio-mode=auto -v",
+      "command": "make typecheck",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "chain: test",
+      "type": "shell",
+      "command": "make test",
+      "options": { "cwd": "${workspaceFolder}" },
       "group": { "kind": "test", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "test: with coverage",
+      "label": "chain: test with coverage",
       "type": "shell",
-      "command": "cd .. && uv run pytest chain/tests/ --asyncio-mode=auto -v --cov=chain --cov-report=html",
+      "command": "make test-coverage",
+      "options": { "cwd": "${workspaceFolder}" },
       "group": "test",
       "presentation": { "reveal": "always", "panel": "shared" }
     },
     {
-      "label": "pre-commit: run all",
+      "label": "chain: pre-commit",
       "type": "shell",
-      "command": "uv run pre-commit run --all-files",
+      "command": "make pre-commit",
+      "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "chain: verify",
+      "type": "shell",
+      "command": "make check",
+      "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "reveal": "always", "panel": "shared" }
     }
   ]

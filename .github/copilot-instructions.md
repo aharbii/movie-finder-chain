@@ -27,7 +27,7 @@ LangSmith tracing: opt-in via `LANGSMITH_TRACING=true`.
 
 ## Python standards
 
-- Python 3.13, `uv` workspace member (`backend/.venv`), `ruff` + `mypy --strict`, line length **100**
+- Python 3.13, Docker-only local workflow via `make ...`, attached-container interpreter at `/opt/venv/bin/python`
 - Type annotations required on all public functions
 - Async all the way — no blocking I/O in async context
 - Docstrings on all public classes and functions (Google style)
@@ -49,12 +49,19 @@ LangSmith tracing: opt-in via `LANGSMITH_TRACING=true`.
 ## Pre-commit hooks
 
 ```bash
-uv run pre-commit install
-uv run pre-commit run --all-files
+make pre-commit
 ```
 
 Hooks: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-merge-conflict`,
 `detect-private-key`, `detect-secrets`, `mypy --strict`, `ruff-check --fix`, `ruff-format`.
+
+---
+
+## Local workflow
+
+- `make dev` starts the persistent `chain` container for attached-container editing
+- `make lint`, `make format`, `make typecheck`, `make test`, `make test-coverage`, and `make pre-commit` are the supported repo-local commands
+- Qdrant is always external; use `QDRANT_URL`, `QDRANT_API_KEY_RO`, and `QDRANT_COLLECTION_NAME`
 
 ---
 

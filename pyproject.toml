@@ -63,6 +63,20 @@ ignore_missing_imports = true
 mypy_path = "src"
 explicit_package_bases = true
 
+[[tool.mypy.overrides]]
+# langchain_anthropic stubs require `timeout` and `stop` as positional args in
+# one overload; at runtime these are optional kwargs. Suppress the false
+# positive across the chain nodes that instantiate ChatAnthropic.
+module = ["chain.nodes.confirmation", "chain.nodes.refinement"]
+disable_error_code = ["call-arg"]
+
+[[tool.mypy.overrides]]
+# create_agent (langchain.agents) returns a Pregel whose ainvoke stubs don't
+# match dict[str, list[BaseMessage]] input — suppress at the module level so
+# repo-local strict typechecking stays aligned with the backend workspace.
+module = "chain.nodes.qa_agent"
+disable_error_code = ["call-arg", "call-overload"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

@@ -1,7 +1,9 @@
 """Dead-end node.
 
-Reached when max refinement cycles are exhausted without finding a match.
-Informs the user and suggests concrete ways to improve their search.
+Executes when the maximum number of refinements has been reached without
+finding the movie the user is looking for.  Writes a final apologetic
+message with actionable tips, then resets the phase so the user can
+start a fresh search in the same session.
 """
 
 from __future__ import annotations
@@ -17,11 +19,22 @@ from chain.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def dead_end_node(state: MovieFinderState) -> dict[str, Any]:
-    """Return a graceful dead-end message to the user."""
+async def dead_end_node(state: MovieFinderState) -> dict[str, Any]:
+    """Inform the user that the search is exhausted and reset graph state.
+
+    Resets ``phase``, ``refinement_count``, and ``next_action`` so the
+    session is ready for a new search without requiring a full restart.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        Partial state update with a final AIMessage and discovery-phase reset.
+    """
     cfg = get_config()
     logger.info(
-        f"Dead end reached after {cfg.max_refinements} refinement attempt(s) — no matching movie found"
+        f"Dead end reached after {cfg.max_refinements} refinement attempt(s) "
+        "— no matching movie found"
     )
 
     text = (

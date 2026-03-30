@@ -21,41 +21,45 @@ For org-wide conventions (branching, commits, PRs, release process) see the [bac
 
 ## Development setup
 
-The chain is a **uv workspace member** of the backend repo. Always work from the workspace root for the full experience, or from `chain/` for standalone work.
+The chain is a **uv workspace member** of the backend repo, but this child repo
+now uses a Docker-only local workflow from `backend/chain/`.
 
-### From the workspace root (recommended)
-
-```bash
-cd backend/
-uv sync --group dev          # installs chain + imdbapi + dev tools
-cp .env.example .env && $EDITOR .env
-uv run pre-commit install
-```
-
-### Standalone (chain repo only)
+### Start the repo-local dev container
 
 ```bash
-cd chain/
-uv sync --group dev
 cp .env.example .env && $EDITOR .env
-uv run pre-commit install
-
-# Start local Qdrant (required for integration tests)
-docker compose up qdrant -d
+make dev
 ```
+
+Keep `make dev` running in one terminal. In another terminal, use the
+repo-local targets:
+
+```bash
+make lint
+make format
+make typecheck
+make test
+make test-coverage
+make pre-commit
+```
+
+If you use VS Code, attach to the running `chain` container after `make dev`.
+The committed `.vscode/` settings, tasks, and launch configs assume that
+attached-container workflow.
 
 ### Minimum required environment variables
 
 ```
-QDRANT_ENDPOINT=    # from rag_ingestion team, or http://localhost:6333 for local
-QDRANT_API_KEY=     # empty string for local Qdrant
-QDRANT_COLLECTION=
+QDRANT_URL=
+QDRANT_API_KEY_RO=
+QDRANT_COLLECTION_NAME=movies
 EMBEDDING_MODEL=text-embedding-3-large
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
-IMDB_API_KEY=
-IMDB_BASE_URL=
 ```
+
+`make test` and `make test-coverage` use stubs only. They do not require live
+Qdrant, OpenAI, or Anthropic credentials.
 
 ---
 
@@ -63,6 +67,7 @@ IMDB_BASE_URL=
 
 ```
 chain/
+├── Makefile               ← Docker-only local workflow targets
 ├── src/chain/
 │   ├── __init__.py          ← public API: compile_graph()
 │   ├── config.py            ← ChainConfig (Pydantic Settings, all env vars)
@@ -223,14 +228,8 @@ mocker.patch(
 ### Running tests
 
 ```bash
-# from workspace root
-uv run pytest chain/tests/ -v
-
-# specific test file
-uv run pytest chain/tests/test_nodes.py -v -k "test_rag_search"
-
-# with coverage
-uv run pytest chain/tests/ --cov=chain/src --cov-report=term-missing
+make test
+make test-coverage
 ```
 
 ---
@@ -240,12 +239,8 @@ uv run pytest chain/tests/ --cov=chain/src --cov-report=term-missing
 Examples make real API calls — ensure `.env` is filled in first.
 
 ```bash
-# From workspace root
-uv run python chain/examples/basic_usage.py
-uv run python chain/examples/streaming_example.py
-
-# From chain/ directory
-uv run python examples/basic_usage.py
+make example-basic
+make example-streaming
 ```
 
 ---
@@ -256,9 +251,9 @@ Enable tracing to debug the graph execution step by step:
 
 ```bash
 # in .env
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=<your-langsmith-key>
-LANGCHAIN_PROJECT=movie-finder
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=<your-langsmith-key>
+LANGSMITH_PROJECT=movie-finder
 ```
 
 Every graph invocation will appear in the [LangSmith UI](https://smith.langchain.com) with per-node inputs, outputs, latency, and token counts.

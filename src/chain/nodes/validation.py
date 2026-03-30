@@ -1,8 +1,8 @@
 """Validation node.
 
-Post-processes enriched movies: filters out low-confidence matches, deduplicates
-by IMDb ID, and sorts highest-confidence first.  The result is the definitive
-candidate pool presented to the user.
+Filters the enriched movie candidates based on a confidence threshold and
+IMDb data presence.  Candidates that are too low-confidence or failed to
+resolve to an IMDb ID are removed from the active state.
 """
 
 from __future__ import annotations
@@ -16,41 +16,37 @@ from chain.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def validation_node(state: MovieFinderState) -> dict[str, Any]:
-    """Filter, deduplicate, and rank the enriched movie list."""
+async def validation_node(state: MovieFinderState) -> dict[str, Any]:
+    """Filter out low-confidence candidates.
+
+    Args:
+        state: The current graph state.
+
+    Returns:
+        Partial state update with a filtered enriched_movies list.
+    """
     cfg = get_config()
     enriched: list[dict[str, Any]] = state.get("enriched_movies", [])
 
-    # Keep candidates that have an IMDb match above the confidence threshold.
-    # Also include candidates without any IMDb match (confidence==0) if there
-    # were fewer than 3 validated results — so the user always sees something.
-    validated = [
+    if not enriched:
+        return {"enriched_movies": []}
+
+    # Keep only those with an IMDb ID and confidence >= threshold
+    valid_movies = [
         m for m in enriched if m.get("imdb_id") and m["confidence"] >= cfg.confidence_threshold
     ]
 
-    # Deduplicate by IMDb ID (keep highest confidence per ID)
-    seen_ids: set[str] = set()
-    deduped: list[dict[str, Any]] = []
-    for movie in sorted(validated, key=lambda m: m["confidence"], reverse=True):
-        imdb_id = movie.get("imdb_id")
-        if imdb_id not in seen_ids:
-            if imdb_id:
-                seen_ids.add(imdb_id)
-            deduped.append(movie)
+    # Log what was filtered out
+    filtered_count = len(enriched) - len(valid_movies)
+    if filtered_count > 0:
+        logger.info(f"Validation node: filtered out {filtered_count} low-confidence candidate(s)")
+        for movie in enriched:
+            imdb_id = movie.get("imdb_id")
+            conf = movie.get("confidence", 0.0)
+            if not imdb_id or conf < cfg.confidence_threshold:
+                title = movie.get("imdb_title") or movie.get("rag_title", "?")
+                logger.debug(f"  [Filtered] {title} (conf={conf:.2f}, id={imdb_id})")
 
-    # If validation produced nothing useful, fall back to the raw enriched list
-    # sorted by whatever confidence we have (even 0.0), so the node never returns
-    # an empty pool when RAG found candidates.
-    if not deduped and enriched:
-        logger.warning(
-            f"No candidates above confidence threshold {cfg.confidence_threshold:.2f} — returning all {len(enriched)} raw candidates"
-        )
-        deduped = sorted(enriched, key=lambda m: m["confidence"], reverse=True)
-
-    # Cap at a reasonable display limit
-    final = deduped[:5]
-
-    logger.info(
-        f"Validation: {len(enriched)} enriched → {len(deduped)} validated → {len(final)} displayed"
-    )
-    return {"enriched_movies": final}
+    # If everything was filtered out, we still return an empty list so the
+    # presentation node can handle the "no results" message correctly.
+    return {"enriched_movies": valid_movies}

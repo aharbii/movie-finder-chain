@@ -61,7 +61,7 @@ src/chain/
 | AI pipeline | LangGraph 0.2+, LangChain 0.3+ |
 | LLM | `langchain-anthropic` — Claude Sonnet for confirmation/refinement/Q&A flows |
 | Embeddings | `langchain-openai` — `text-embedding-3-large` (3072-dim) |
-| Vector store | `qdrant-client` (Qdrant Cloud in production; local Qdrant supported for development and tests) |
+| Vector store | `qdrant-client` (Qdrant Cloud — always external) |
 | IMDb | `imdbapi` workspace member |
 | Tracing | LangSmith (`LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`) |
 | Linting | `ruff` (line-length 100) · `mypy --strict` |
@@ -71,7 +71,7 @@ src/chain/
 ### Environment variables (`.env.example`)
 
 ```
-QDRANT_ENDPOINT, QDRANT_API_KEY, QDRANT_COLLECTION
+QDRANT_URL, QDRANT_API_KEY_RO, QDRANT_COLLECTION_NAME
 EMBEDDING_MODEL=text-embedding-3-large, EMBEDDING_DIMENSION=3072
 ANTHROPIC_API_KEY
 CLASSIFIER_MODEL=claude-haiku-4-5-20251001
@@ -118,8 +118,7 @@ When reading state fields in nodes, always use `.get()` with a safe default unti
 `backend/chain/.pre-commit-config.yaml` — install and run from this directory.
 
 ```bash
-uv run pre-commit install    # once per clone
-uv run pre-commit run --all-files
+make pre-commit
 ```
 
 Hooks: whitespace/YAML/safety checks, `detect-secrets`, `mypy --strict` (pydantic deps), `ruff-check --fix`, `ruff-format`. **Never `--no-verify`.**
@@ -130,12 +129,12 @@ False positive → `# pragma: allowlist secret` + `detect-secrets scan > .secret
 ## VSCode setup
 
 `backend/chain/.vscode/` is committed with a full workspace configuration:
-- `settings.json` — Python interpreter (`backend/.venv` via `../`), Ruff, mypy strict, pytest discovery
-- `extensions.json` — Python, debugpy, Ruff, mypy, TOML, GitLens
-- `launch.json` — `chat.py` interactive runner + pytest all / current file
-- `tasks.json` — lint (runs from workspace root via `cd ..`), format, test, test with coverage, pre-commit
+- `settings.json` — attached-container Python interpreter (`/opt/venv/bin/python`), Ruff, mypy strict, pytest discovery
+- `extensions.json` — Remote Containers, Python, Pylance, debugpy, Ruff, mypy, Makefile tools, coverage gutters
+- `launch.json` — `chat.py` interactive runner + pytest all / current file inside the attached container
+- `tasks.json` — Docker-backed `make ...` targets from `backend/chain/`
 
-**Interpreter:** Run `uv sync --all-packages` from `backend/` — creates `backend/.venv/`
+**Workflow:** run `make dev`, then attach VS Code to the running `chain` container.
 
 ---
 
