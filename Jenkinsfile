@@ -1,15 +1,15 @@
 // =============================================================================
 // movie-finder-chain — Jenkins declarative pipeline
 //
-// Triggers:
-//   • PR validation  — every pull request to main
-//   • Release        — every git tag matching v*
+// Pipeline modes (Jenkins Multibranch Pipeline):
+//   PR build   — every pull request: Lint + Typecheck + Test
+//   Main build — push to main: same as PR + Dockerfile smoke-build
+//   Tag build  — v* tag: same as main build
 //
-// Required Jenkins credentials:
-//   docker-registry-url  — Docker registry base URL (e.g. ghcr.io/aharbii)
+// NOTE: This image is NOT pushed to ACR. chain is an internal Python library
+// imported by the backend app; only the backend app image is published to ACR.
 //
-// Required Jenkins plugins:
-//   Docker Pipeline, JUnit, Cobertura, Credentials Binding
+// Required Jenkins plugins: Docker Pipeline, JUnit, Cobertura, Credentials Binding
 // =============================================================================
 
 pipeline {
@@ -23,6 +23,7 @@ pipeline {
 
     environment {
         SERVICE_NAME = 'movie-finder-chain'
+        COMPOSE_PROJECT_NAME = "movie-finder-chain-ci-${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -30,23 +31,18 @@ pipeline {
         // ------------------------------------------------------------------ //
         stage('Initialize') {
             steps {
-                // Ensure .env exists for docker-compose (even if empty in CI)
                 sh 'make init'
             }
         }
 
         // ------------------------------------------------------------------ //
-        stage('Quality') {
+        stage('Lint + Typecheck') {
             parallel {
                 stage('Lint') {
-                    steps {
-                        sh 'make lint'
-                    }
+                    steps { sh 'make lint' }
                 }
                 stage('Typecheck') {
-                    steps {
-                        sh 'make typecheck'
-                    }
+                    steps { sh 'make typecheck' }
                 }
             }
         }
@@ -58,7 +54,6 @@ pipeline {
             }
             post {
                 always {
-                    // Assuming coverage XML name from Makefile: chain-coverage.xml
                     cobertura coberturaReportFile: 'chain-coverage.xml',
                               onlyStable: false,
                               failNoReports: false
@@ -67,28 +62,20 @@ pipeline {
         }
 
         // ------------------------------------------------------------------ //
-        stage('Build & Push Image') {
-            // Only on main branch merges or version tags
+        // Validate Dockerfile builds correctly on main/tag, without pushing.
+        stage('Build Dockerfile') {
             when {
                 anyOf {
                     branch 'main'
                     buildingTag()
                 }
             }
-            environment {
-                DOCKER_REGISTRY = credentials('docker-registry-url')
-                IMAGE_TAG = "${DOCKER_REGISTRY}/${SERVICE_NAME}:${env.GIT_TAG_NAME ?: env.GIT_COMMIT.take(8)}"
-            }
             steps {
-                // Build using the repo-local Dockerfile
-                sh "docker build -t ${IMAGE_TAG} ."
-                sh "docker push ${IMAGE_TAG}"
-
-                script {
-                    if (env.BRANCH_NAME == 'main') {
-                        sh "docker tag ${IMAGE_TAG} ${DOCKER_REGISTRY}/${SERVICE_NAME}:latest"
-                        sh "docker push ${DOCKER_REGISTRY}/${SERVICE_NAME}:latest"
-                    }
+                sh "docker build --target runtime -t ${env.SERVICE_NAME}:ci-${env.BUILD_NUMBER} ."
+            }
+            post {
+                always {
+                    sh "docker rmi ${env.SERVICE_NAME}:ci-${env.BUILD_NUMBER} || true"
                 }
             }
         }
@@ -97,19 +84,11 @@ pipeline {
 
     post {
         always {
-            // Standard cleanup target
-            sh 'make ci-down'
+            sh 'make ci-down || true'
             cleanWs()
         }
         failure {
-            echo "Pipeline failed on branch ${env.BRANCH_NAME} — check logs above."
-        }
-        success {
-            script {
-                if (buildingTag()) {
-                    echo "Release ${env.GIT_TAG_NAME} published successfully."
-                }
-            }
+            echo "Pipeline failed on ${env.BRANCH_NAME ?: env.GIT_TAG_NAME ?: 'unknown ref'}."
         }
     }
 }

@@ -101,26 +101,28 @@ Prerequisites:
 - Docker with the Compose plugin
 - `make`
 
-Initialize a local env file, then start the persistent dev container:
+Initialize, then start the persistent dev container:
 
 ```bash
-cp .env.example .env
-make dev
+make init       # build image, create .env from template, install git pre-commit hook
+make editor-up  # start container for VS Code attach
 ```
 
-`make dev` keeps the `chain` container running for attached-container editing.
+`make editor-up` keeps the `chain` container running for attached-container editing.
 In a second terminal, use the repo-local targets:
 
 ```bash
-make lint
-make format
-make typecheck
-make test
-make test-coverage
-make pre-commit
+make lint           # ruff check (report only)
+make fix            # ruff check --fix + ruff format (auto-apply)
+make format         # ruff format (apply)
+make typecheck      # mypy --strict
+make test           # pytest
+make test-coverage  # pytest + coverage XML/HTML report
+make pre-commit     # all hooks (full gate — also runs on git commit)
+make check          # lint + typecheck + test-coverage
 ```
 
-VS Code is configured for this workflow: after `make dev`, attach to the
+VS Code is configured for this workflow: after `make editor-up`, attach to the
 running `chain` container and use the committed `.vscode/` launch/tasks files.
 
 ## Configuration
@@ -259,16 +261,18 @@ make test-coverage
 Use the repo-local Docker targets for all quality checks:
 
 ```bash
-make lint
-make format
-make typecheck
-make pre-commit
-make check
+make lint           # ruff check (report only)
+make fix            # ruff check --fix + ruff format (auto-apply)
+make format         # ruff format
+make typecheck      # mypy --strict
+make pre-commit     # full hook suite (also enforced on git commit)
+make check          # lint + typecheck + test-coverage (CI gate)
 ```
 
-Hooks: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`,
-`detect-private-key`, `detect-secrets`, `ruff-check --fix`, `ruff-format`,
-`mypy`.
+Hooks enforced on every `git commit` via the hook installed by `make init`:
+`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`,
+`check-json`, `check-ast`, `debug-statements`, `detect-private-key`,
+`detect-secrets`, `ruff-check --fix`, `ruff-format`, `mypy`.
 
 ### Examples
 
@@ -281,7 +285,7 @@ make example-streaming
 
 ## Container workflow
 
-`make dev` starts a persistent `chain` container for attached-container
+`make editor-up` starts a persistent `chain` container for attached-container
 editing, interactive debugging, and ad hoc shell access via `make shell`.
 
 `docker-compose.yml` intentionally defines only the `chain` container. Qdrant
