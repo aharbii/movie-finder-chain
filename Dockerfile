@@ -11,11 +11,6 @@
 
 FROM python:3.13-slim AS uv-base
 
-# Git is needed for uv sync in case of git dependencies, even in builder/runtime
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
-
 COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 
 ENV PYTHONUNBUFFERED=1 \
@@ -26,20 +21,20 @@ ENV PYTHONUNBUFFERED=1 \
 # ---- Stage 1: dev -----------------------------------------------------------
 FROM uv-base AS dev
 
-# Install rich dev tools only in the dev stage
+# Install only what the attached-container workflow actually needs:
+#   git   — pre-commit hooks and submodule ops
+#   zsh   — make shell target
+#   make  — run make targets from inside the container when needed
+#   curl  — occasional HTTP debugging / health checks
+# keep-sorted start
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
+    git \
     make \
     zsh \
-    vim \
-    jq \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Oh My Zsh for a rich terminal experience
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
-    chsh -s $(which zsh)
+# keep-sorted end
 
 WORKDIR /workspace
 
@@ -50,8 +45,6 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH="/workspace/chain/src:/workspace/imdbapi/src" \
     SHELL=/bin/zsh
 
-# In standalone mode, we assume files are in .
-# In workspace mode, the Makefile handles context.
 COPY pyproject.toml uv.lock* ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -62,12 +55,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     fi && \
     /opt/venv/bin/pip install --no-cache-dir pre-commit
 
-# Configure zsh to use oh-my-zsh and have a nice prompt
-RUN sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="agnoster"/' ~/.zshrc && \
-    echo "alias ls='ls --color=auto'" >> ~/.zshrc && \
-    echo "alias ll='ls -alF'" >> ~/.zshrc && \
-    echo "alias la='ls -A'" >> ~/.zshrc && \
-    echo "alias l='ls -CF'" >> ~/.zshrc
+# Minimal zsh config — no internet download, no heavy themes.
+RUN printf 'export PS1="[chain] %n@%m:%~%% "\nalias ls="ls --color=auto"\nalias ll="ls -alF"\n' \
+    > /root/.zshrc
 
 CMD ["sleep", "infinity"]
 

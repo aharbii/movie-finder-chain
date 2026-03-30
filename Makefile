@@ -1,56 +1,73 @@
 # =============================================================================
 # movie-finder-chain — Docker-only developer contract
 #
-# Canonical targets:
-#   make init           Initialize a local .env from template
-#   make up             Start the dev container (alias for dev)
-#   make down           Stop the dev container
-#   make editor-up      Start a headless dev container for IDE attachment
-#   make editor-down    Stop the IDE-attached dev container
-#   make shell          Open a shell in the running container
-#   make lint           Run ruff check
-#   make format         Run ruff format
-#   make typecheck      Run mypy --strict
-#   make test           Run pytest
-#   make test-coverage  Run pytest with coverage output
-#   make pre-commit     Run pre-commit hooks
-#   make ci-down        Hard cleanup for CI agents (volumes + local images)
+# Usage:
+#   make help
+#   make <target>
+#
+# All developer commands execute through Docker Compose so linting, testing,
+# formatting, and pre-commit do not depend on a host-managed Python environment.
+#
+# Typical first-time flow:
+#   make init        # build image + create .env + install git hook
+#   make editor-up   # start container for VS Code attach
+#   make check       # lint + typecheck + tests with coverage
+#
+# When the editor container is already running, quality commands use
+# 'docker compose exec' instead of a new container — faster for interactive dev.
 # =============================================================================
 
-.PHONY: help init up dev down editor-up editor-down logs shell lint format typecheck \
-	test test-coverage pre-commit ci-down check
+.PHONY: help init up dev down editor-up editor-down logs shell lint format fix typecheck \
+	test test-coverage pre-commit ci-down check example-basic example-streaming
 
 .DEFAULT_GOAL := help
 
 COMPOSE ?= docker compose
 SERVICE ?= chain
+GIT_DIR_HOST := $(shell git rev-parse --git-dir)
+GIT_HOOKS_DIR := $(GIT_DIR_HOST)/hooks
+
 CHAIN_PATHS := src tests examples chat.py
 COVERAGE_XML ?= chain-coverage.xml
 COVERAGE_HTML ?= htmlcov/chain
+
+# ---------------------------------------------------------------------------
+# exec when running, run --rm otherwise — avoids container startup overhead
+# for interactive development while remaining correct for CI.
+# ---------------------------------------------------------------------------
+define exec_or_run
+	@if $(COMPOSE) ps --services --status running 2>/dev/null | grep -qx "$(SERVICE)"; then \
+		$(COMPOSE) exec $(SERVICE) $(1); \
+	else \
+		$(COMPOSE) run --rm --no-deps $(SERVICE) $(1); \
+	fi
+endef
 
 help:
 	@echo ""
 	@echo "Movie Finder Chain — available targets"
 	@echo "======================================"
 	@echo ""
+	@echo "  Setup"
+	@echo "    init             Build image, create .env from template, install git hook"
+	@echo ""
 	@echo "  Lifecycle"
-	@echo "    init             Initialize a local .env from .env.example"
-	@echo "    up               Start the persistent dev container (alias for dev)"
-	@echo "    dev              Start the persistent dev container (Ctrl+C to stop)"
+	@echo "    up               Start the persistent dev container (alias for editor-up)"
 	@echo "    down             Stop the dev container"
 	@echo "    editor-up        Start a headless container for IDE attachment"
 	@echo "    editor-down      Stop the IDE-attached container"
 	@echo "    logs             Tail logs from the running container"
-	@echo "    shell            Open a shell in the running container"
+	@echo "    shell            Open a zsh shell in the running container"
 	@echo ""
 	@echo "  Quality"
-	@echo "    lint             Run ruff check inside Docker"
-	@echo "    format           Run ruff format inside Docker"
-	@echo "    typecheck        Run mypy --strict inside Docker"
-	@echo "    test             Run pytest inside Docker"
+	@echo "    lint             Run ruff check (report only)"
+	@echo "    format           Run ruff format (apply)"
+	@echo "    fix              Run ruff check --fix + ruff format (apply all auto-fixes)"
+	@echo "    typecheck        Run mypy --strict"
+	@echo "    test             Run pytest"
 	@echo "    test-coverage    Run pytest with coverage XML/HTML output"
-	@echo "    pre-commit       Run pre-commit hooks inside Docker"
-	@echo "    check            Convenience alias: lint + typecheck + test"
+	@echo "    pre-commit       Run all pre-commit hooks"
+	@echo "    check            lint + typecheck + test-coverage"
 	@echo ""
 	@echo "  CI"
 	@echo "    ci-down          Hard cleanup for CI (down -v --rmi local)"
@@ -61,18 +78,19 @@ help:
 	@echo ""
 
 init:
-	@if [ ! -f .env ]; then cp .env.example .env && echo ".env initialized"; else echo ".env already exists"; fi
+	@if [ ! -f .env ]; then cp .env.example .env && echo ">>> .env created from .env.example"; fi
+	$(COMPOSE) build $(SERVICE)
+	@printf '#!/bin/sh\nexec make pre-commit\n' > $(GIT_HOOKS_DIR)/pre-commit
+	@chmod +x $(GIT_HOOKS_DIR)/pre-commit
+	@echo ">>> git pre-commit hook installed (calls 'make pre-commit' on every commit)"
 
-up: dev
-
-dev:
-	$(COMPOSE) up --build $(SERVICE)
+up: editor-up
 
 down:
 	$(COMPOSE) down
 
 editor-up:
-	$(COMPOSE) up -d --build $(SERVICE)
+	$(COMPOSE) up -d $(SERVICE)
 
 editor-down: down
 
@@ -80,38 +98,42 @@ logs:
 	$(COMPOSE) logs -f $(SERVICE)
 
 shell:
-	@if $(COMPOSE) ps --services --status running | grep -qx "$(SERVICE)"; then \
+	@if $(COMPOSE) ps --services --status running 2>/dev/null | grep -qx "$(SERVICE)"; then \
 		$(COMPOSE) exec $(SERVICE) zsh; \
 	else \
 		$(COMPOSE) run --rm $(SERVICE) zsh; \
 	fi
 
 lint:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) ruff check $(CHAIN_PATHS)
+	$(call exec_or_run,ruff check $(CHAIN_PATHS))
 
 format:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) ruff format $(CHAIN_PATHS)
+	$(call exec_or_run,ruff format $(CHAIN_PATHS))
+
+fix:
+	$(call exec_or_run,ruff check --fix $(CHAIN_PATHS))
+	$(call exec_or_run,ruff format $(CHAIN_PATHS))
 
 typecheck:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) mypy src
+	$(call exec_or_run,mypy src)
 
 test:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) pytest tests/ --asyncio-mode=auto -v --tb=short
+	$(call exec_or_run,pytest tests/ --asyncio-mode=auto -v --tb=short)
 
 test-coverage:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) pytest tests/ --asyncio-mode=auto -v --tb=short \
+	$(call exec_or_run,pytest tests/ --asyncio-mode=auto -v --tb=short \
 		--cov=chain \
 		--cov-report=term-missing \
 		--cov-report=xml:$(COVERAGE_XML) \
-		--cov-report=html:$(COVERAGE_HTML)
+		--cov-report=html:$(COVERAGE_HTML))
 
 pre-commit:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) pre-commit run --all-files
+	$(call exec_or_run,pre-commit run --all-files)
 
 ci-down:
 	$(COMPOSE) down -v --rmi local
 
-check: lint typecheck test
+check: lint typecheck test-coverage
 
 example-basic:
 	$(COMPOSE) run --rm --no-deps $(SERVICE) python examples/basic_usage.py
