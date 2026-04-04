@@ -33,7 +33,8 @@ export CHAIN_GIT_DIR := ${GIT_DIR_HOST}
 
 SOURCE_PATHS := src tests examples
 COVERAGE_XML ?= coverage.xml
-COVERAGE_HTML ?= htmlcov/chain
+COVERAGE_HTML ?= htmlcov
+JUNIT_XML ?= junit.xml
 
 # ---------------------------------------------------------------------------
 # exec when running, run --rm otherwise — avoids container startup overhead
@@ -166,8 +167,8 @@ clean:
 	$(call exec_or_run,find . -type d -name ".ruff_cache" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
 	$(call exec_or_run,find . -name "*.egg-info" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
 	$(call exec_or_run,find . -name "$(COVERAGE_XML)" -not -path "./.git/*" -delete 2>/dev/null || true)
-	$(call exec_or_run,find . -name "test-results.xml" -not -path "./.git/*" -delete 2>/dev/null || true)
-	$(call exec_or_run,find . -type d -name "htmlcov" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	$(call exec_or_run,find . -name "$(JUNIT_XML)" -not -path "./.git/*" -delete 2>/dev/null || true)
+	$(call exec_or_run,find . -type d -name "$(COVERAGE_HTML)" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
 	@echo "Clean complete."
 
 clean-docker: ci-down

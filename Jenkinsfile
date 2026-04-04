@@ -74,7 +74,7 @@ pipeline {
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: 'test-results.xml'
+                    junit allowEmptyResults: true, testResults: 'junit.xml'
                     recordCoverage(
                         tools: [
                             [parser: 'COBERTURA', pattern: 'coverage.xml']
