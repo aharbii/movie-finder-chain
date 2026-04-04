@@ -216,28 +216,29 @@ async for event in graph.astream_events(
 ### FastAPI integration
 
 ```python
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from langchain_core.messages import AIMessage, HumanMessage
+
 from chain import checkpoint_lifespan, compile_graph
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async with checkpoint_lifespan() as checkpointer:
+        app.state.graph = compile_graph(checkpointer=checkpointer)
+        yield
 
 
-@app.on_event("startup")
-async def startup() -> None:
-    app.state.checkpointer_cm = checkpoint_lifespan()
-    app.state.checkpointer = await app.state.checkpointer_cm.__aenter__()
-    app.state.graph = compile_graph(checkpointer=app.state.checkpointer)
+app = FastAPI(lifespan=lifespan)
 
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
-    await app.state.checkpointer_cm.__aexit__(None, None, None)
 
 @app.post("/chat/{session_id}")
 async def chat(session_id: str, message: str):
     config = {"configurable": {"thread_id": session_id}}
-    state = await graph.ainvoke(
+    state = await app.state.graph.ainvoke(
         {"messages": [HumanMessage(content=message)]},
         config=config,
     )
