@@ -14,7 +14,6 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "imdbapi-client",
     "langgraph>=0.2.0",
     "langchain-anthropic>=0.3.0",
     "langchain-openai>=0.3.0",
@@ -46,12 +45,12 @@ dev = [
 [tool.uv]
 default-groups = []
 
+[tool.uv.sources]
+imdbapi-client = { path = "imdbapi" }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.uv.sources]
-imdbapi-client = { path = "../imdbapi" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/chain"]
@@ -105,7 +104,7 @@ addopts = ["-v", "--tb=short"]
 
 [tool.coverage.run]
 source = ["."]
-omit = ["tests/*", "examples/*", "*/py.typed"]
+omit = ["tests/*", "examples/*", "*/py.typed", "imdbapi/*"]
 
 [tool.coverage.report]
 show_missing = true

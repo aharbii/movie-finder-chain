@@ -15,11 +15,13 @@ services:
   chain:
     build:
       context: ..
-      dockerfile: chain/Dockerfile
+      dockerfile: Dockerfile
       target: dev
     image: movie-finder-chain:dev
     working_dir: /workspace
-    command: ["sleep", "infinity"]
+    command:
+      - sleep
+      - infinity
     environment:
       GIT_DIR: /workspace/.gitdir
       GIT_WORK_TREE: /workspace

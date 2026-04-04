@@ -31,7 +31,7 @@ GIT_HOOKS_DIR := $(GIT_DIR_HOST)/hooks
 
 export CHAIN_GIT_DIR := ${GIT_DIR_HOST}
 
-SOURCE_PATHS := .
+SOURCE_PATHS := src tests examples
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML ?= htmlcov/chain
 

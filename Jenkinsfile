@@ -19,6 +19,7 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '20'))
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds(abortPrevious: true)
+        skipDefaultCheckout()
     }
 
     environment {
@@ -27,6 +28,25 @@ pipeline {
     }
 
     stages {
+
+        // ------------------------------------------------------------------ //
+        stage('Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: scm.branches,
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [[
+                        $class: 'SubmoduleOption',
+                        disableSubmodules: false,
+                        parentCredentials: true,
+                        recursiveSubmodules: true,
+                        trackingSubmodules: false
+                    ]],
+                    userRemoteConfigs: scm.userRemoteConfigs
+                ])
+            }
+        }
 
         // ------------------------------------------------------------------ //
         stage('Initialize') {

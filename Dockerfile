@@ -34,12 +34,10 @@ RUN python -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH" \
     VIRTUAL_ENV="/opt/venv" \
-    PYTHONPATH="/workspace/src:/imdbapi/src"
+    PYTHONPATH="/workspace/src:/workspace/imdbapi/src"
 
-# Copy manifests for current repo AND its path dependency for resolution.
-# Context is assumed to be the parent directory (backend/) if built via Makefile.
-COPY chain/pyproject.toml chain/uv.lock* chain/README.md ./
-COPY imdbapi/pyproject.toml imdbapi/README.md /imdbapi/
+COPY pyproject.toml uv.lock* README.md ./
+COPY imdbapi/pyproject.toml imdbapi/README.md ./imdbapi/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --all-packages --all-groups --active --no-install-workspace
@@ -52,11 +50,14 @@ FROM uv-base AS builder
 
 WORKDIR /build
 
-COPY pyproject.toml uv.lock* ./
+COPY pyproject.toml uv.lock* README.md ./
 COPY src ./src
 
+COPY imdbapi/pyproject.toml imdbapi/README.md ./imdbapi/
+COPY imdbapi/src ./imdbapi/src
+
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --no-install-project
+    uv sync --frozen --no-dev --no-install-project --editable --reinstall-package /imdbapi
 
 
 # ---- Stage 3: runtime -------------------------------------------------------
