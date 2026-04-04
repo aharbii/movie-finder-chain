@@ -10,16 +10,16 @@ Parent project: `aharbii/movie-finder` — all issues created there first, then 
 
 ## Package role
 
-| Node | Responsibility |
-|---|---|
-| `classify` | Claude Haiku — determines if message is a movie query or follow-up |
-| `embed` | OpenAI `text-embedding-3-large` (3072-dim) — embeds the user query |
-| `search` | Qdrant Cloud vector search — retrieves candidate movies |
-| `confirm` | Claude Sonnet — selects the best match from candidates |
+| Node         | Responsibility                                                              |
+| ------------ | --------------------------------------------------------------------------- |
+| `classify`   | Claude Haiku — determines if message is a movie query or follow-up          |
+| `embed`      | OpenAI `text-embedding-3-large` (3072-dim) — embeds the user query          |
+| `search`     | Qdrant Cloud vector search — retrieves candidate movies                     |
+| `confirm`    | Claude Sonnet — selects the best match from candidates                      |
 | `imdb_fetch` | Calls `imdbapi` client (independent submodule) for live metadata enrichment |
-| `answer` | Claude Sonnet — streams the final answer via SSE |
-| `clarify` | Claude Haiku — asks follow-up when intent is ambiguous |
-| `fallback` | Handles no-match and error paths |
+| `answer`     | Claude Sonnet — streams the final answer via SSE                            |
+| `clarify`    | Claude Haiku — asks follow-up when intent is ambiguous                      |
+| `fallback`   | Handles no-match and error paths                                            |
 
 LangSmith tracing: opt-in via `LANGSMITH_TRACING=true`.
 
@@ -37,12 +37,12 @@ LangSmith tracing: opt-in via `LANGSMITH_TRACING=true`.
 
 ## Design patterns — follow these
 
-| Pattern | Rule |
-|---|---|
-| **State machine** | New behaviour = new node or edge. Never add branching inside existing nodes. |
-| **Strategy** | New LLM or embedding provider = new class implementing the provider interface. No `if provider == "openai"` in core logic. |
-| **Factory** | Node construction is centralised in `graph.py`. Nodes are pure functions. |
-| **Configuration object** | All env vars loaded once in `config.py` via Pydantic `BaseSettings`. |
+| Pattern                  | Rule                                                                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| **State machine**        | New behaviour = new node or edge. Never add branching inside existing nodes.                                               |
+| **Strategy**             | New LLM or embedding provider = new class implementing the provider interface. No `if provider == "openai"` in core logic. |
+| **Factory**              | Node construction is centralised in `graph.py`. Nodes are pure functions.                                                  |
+| **Configuration object** | All env vars loaded once in `config.py` via Pydantic `BaseSettings`.                                                       |
 
 ---
 
@@ -67,13 +67,13 @@ Hooks: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-merge-co
 
 ## Known issues most relevant to this package
 
-| # | Title |
-|---|---|
-| #2 | `MemorySaver` non-persistent — breaks multi-replica |
-| #7 | OpenAI + Qdrant clients re-created per LangGraph node |
-| #8 | IMDb retry base delay 30 s — blocks SSE stream |
+| #   | Title                                                             |
+| --- | ----------------------------------------------------------------- |
+| #2  | `MemorySaver` non-persistent — breaks multi-replica               |
+| #7  | OpenAI + Qdrant clients re-created per LangGraph node             |
+| #8  | IMDb retry base delay 30 s — blocks SSE stream                    |
 | #15 | `total=False` on `MovieFinderState` TypedDict weakens type safety |
-| #18 | `create_agent` import path is non-standard |
+| #18 | `create_agent` import path is non-standard                        |
 
 ---
 

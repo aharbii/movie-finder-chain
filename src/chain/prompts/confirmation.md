@@ -16,11 +16,11 @@ movies, or not.
 
 Classify the user's response into exactly one of three decisions:
 
-| decision | when to use |
-|---|---|
+| decision    | when to use                                                                                                                                                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `confirmed` | The user clearly indicates one of the numbered candidates is their movie. They may say things like "Yes, that's #2", "The second one", "Inception — yes!", or use any phrasing that unambiguously points to a specific candidate. |
-| `not_found` | The user says none of the candidates match. They may say "No", "None of these", "Not quite", "My movie isn't here", or express disappointment. |
-| `unclear` | The response is ambiguous — e.g., they ask a question, say something unrelated, or provide a partial hint that neither confirms nor denies. |
+| `not_found` | The user says none of the candidates match. They may say "No", "None of these", "Not quite", "My movie isn't here", or express disappointment.                                                                                    |
+| `unclear`   | The response is ambiguous — e.g., they ask a question, say something unrelated, or provide a partial hint that neither confirms nor denies.                                                                                       |
 
 When decision is `confirmed`, set `movie_index` to the **0-based** index of the
 confirmed movie (e.g. if the user says "It's number 3", set `movie_index` to 2).

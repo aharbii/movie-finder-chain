@@ -1,6 +1,7 @@
 # Movie Finder — Annotated Chain Diagram
 
 > **How to read this diagram**
+>
 > - Solid arrows `-->` = deterministic edges (always taken)
 > - Dashed arrows `-.->` = conditional edges (router decides at runtime)
 > - Boxes with rounded corners = processing nodes
@@ -149,26 +150,26 @@ qa_agent        → Claude Sonnet ReAct agent
 
 ## State transitions summary
 
-| From phase | Trigger | To phase |
-|---|---|---|
-| discovery | presentation completes | confirmation |
-| confirmation | user confirms a movie | qa |
-| confirmation | unclear response | confirmation (wait for clarification) |
-| confirmation | no match + count < max | confirmation (after refinement loop) |
-| confirmation | no match + count = max | — (dead end) |
-| qa | every subsequent message | qa (infinite loop) |
+| From phase   | Trigger                  | To phase                              |
+| ------------ | ------------------------ | ------------------------------------- |
+| discovery    | presentation completes   | confirmation                          |
+| confirmation | user confirms a movie    | qa                                    |
+| confirmation | unclear response         | confirmation (wait for clarification) |
+| confirmation | no match + count < max   | confirmation (after refinement loop)  |
+| confirmation | no match + count = max   | — (dead end)                          |
+| qa           | every subsequent message | qa (infinite loop)                    |
 
 ---
 
 ## Component reference
 
-| Node | Model / Service | Role |
-|---|---|---|
-| `rag_search` | OpenAI `text-embedding-3-large` + Qdrant | Semantic vector search |
-| `imdb_enrichment` | IMDb API (async, rate-limited) | Enrich candidates with metadata |
-| `validation` | Pure Python | Filter, deduplicate, rank |
-| `presentation` | Pure Python | Format for the user |
-| `confirmation` | Claude Haiku | Lightweight intent classification |
-| `refinement` | Claude Sonnet | Query improvement from context |
-| `qa_agent` | Claude Sonnet + IMDb tools | Open-ended movie Q&A |
-| `dead_end` | Pure Python | Graceful exit after max retries |
+| Node              | Model / Service                          | Role                              |
+| ----------------- | ---------------------------------------- | --------------------------------- |
+| `rag_search`      | OpenAI `text-embedding-3-large` + Qdrant | Semantic vector search            |
+| `imdb_enrichment` | IMDb API (async, rate-limited)           | Enrich candidates with metadata   |
+| `validation`      | Pure Python                              | Filter, deduplicate, rank         |
+| `presentation`    | Pure Python                              | Format for the user               |
+| `confirmation`    | Claude Haiku                             | Lightweight intent classification |
+| `refinement`      | Claude Sonnet                            | Query improvement from context    |
+| `qa_agent`        | Claude Sonnet + IMDb tools               | Open-ended movie Q&A              |
+| `dead_end`        | Pure Python                              | Graceful exit after max retries   |

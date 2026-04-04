@@ -5,12 +5,14 @@ Foundational mandate for `movie-finder-chain` (`backend/chain/`).
 ---
 
 ## What this submodule does
+
 LangGraph 8-node AI pipeline.
 `classify` → `search_rag` → `enrich_imdb` → `reason` → `route` → `refine` / `confirm` / `answer`
 
 ---
 
 ## Technology stack
+
 - LangGraph 0.2+, LangChain 0.3+
 - Claude Haiku (classify), Claude Sonnet (reason/Q&A)
 - OpenAI `text-embedding-3-large` (3072-dim)
@@ -20,6 +22,7 @@ LangGraph 8-node AI pipeline.
 ---
 
 ## Design patterns
+
 - **State machine:** New behaviour = new node/edge.
 - **Pure functions:** Nodes take state and return partial updates.
 - **Strategy:** Abstract LLM and embedding providers.
@@ -28,6 +31,7 @@ LangGraph 8-node AI pipeline.
 ---
 
 ## Pre-commit & Linting
+
 - Docker-only local workflow from this directory: `make lint`, `make format`, `make typecheck`,
   `make test`, `make pre-commit`.
 - `mypy --strict` must pass for all nodes.
@@ -56,6 +60,7 @@ LangGraph 8-node AI pipeline.
 ## VSCode setup
 
 `backend/chain/.vscode/` — full workspace configuration for chain only.
+
 - Workflow: run `make dev`, then attach VS Code to the running `chain` container
 - Interpreter: `/opt/venv/bin/python` inside the attached container
 - `launch.json`: `chat.py` interactive runner + pytest all/current file in the attached container

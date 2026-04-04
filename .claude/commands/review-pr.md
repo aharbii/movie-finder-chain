@@ -22,6 +22,7 @@ If a parent issue is referenced, read it. If partial iteration, evaluate only wh
 ## Blocking findings
 
 **Chain-specific patterns:**
+
 - New behaviour added inside existing nodes instead of new node/edge
 - Nodes are not pure functions (side effects outside LangGraph state)
 - Node construction not centralised in `graph.py`
@@ -29,6 +30,7 @@ If a parent issue is referenced, read it. If partial iteration, evaluate only wh
 - `MovieFinderState` bypassed for state changes
 
 **Python standards:**
+
 - Missing type annotations, bare `except:`, `print()`, `type: ignore` without comment
 - Line > 100 chars, blocking I/O in async context, no tests for new logic
 

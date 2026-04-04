@@ -44,6 +44,7 @@ git checkout -b [type]/[kebab-case-title]
 ## Step 5 — Implement
 
 Chain-specific patterns:
+
 - LangGraph state machine: new behaviour = new node or edge, not branching inside existing nodes
 - Node construction is centralised in `graph.py` — nodes are pure functions
 - `MovieFinderState` TypedDict holds all pipeline state — do not bypass it
@@ -51,6 +52,7 @@ Chain-specific patterns:
 - Never re-create OpenAI/Qdrant clients inside nodes (see issue #7)
 
 General backend standards:
+
 - Type annotations required, `mypy --strict`
 - Line length ≤ 100 chars
 - No bare `except:`, no `print()`, async all the way

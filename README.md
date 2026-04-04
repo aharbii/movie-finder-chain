@@ -1,6 +1,6 @@
 # movie-finder-chain
 
-LangGraph pipeline that powers the Movie Finder conversational AI.  The chain
+LangGraph pipeline that powers the Movie Finder conversational AI. The chain
 takes a natural-language plot description, searches a Qdrant vector store of
 Wikipedia movie plots (populated by `rag_ingestion`), enriches the results
 with live IMDb metadata, and guides the user through a discovery →
@@ -30,22 +30,22 @@ User message
 
 ### Nodes
 
-| Node | Model | Responsibility |
-|---|---|---|
-| `rag_search` | — | Embed query with OpenAI, search Qdrant, return top-k candidates |
-| `imdb_enrichment` | — | Parallel IMDB search + `batch_get` for full metadata |
-| `validation` | — | Filter by confidence, deduplicate by IMDb ID, cap at 5 |
-| `presentation` | — | Format candidate pool as an AI message for the user |
-| `confirmation` | Claude Haiku | Classify user response: confirmed / not_found / unclear |
-| `refinement` | Claude Sonnet | Extract new plot details from conversation, build richer query |
-| `qa_agent` | Claude Sonnet + IMDb tools | ReAct agent for open-ended movie Q&A |
-| `dead_end` | — | Graceful exit after max refinement cycles |
+| Node              | Model                      | Responsibility                                                  |
+| ----------------- | -------------------------- | --------------------------------------------------------------- |
+| `rag_search`      | —                          | Embed query with OpenAI, search Qdrant, return top-k candidates |
+| `imdb_enrichment` | —                          | Parallel IMDB search + `batch_get` for full metadata            |
+| `validation`      | —                          | Filter by confidence, deduplicate by IMDb ID, cap at 5          |
+| `presentation`    | —                          | Format candidate pool as an AI message for the user             |
+| `confirmation`    | Claude Haiku               | Classify user response: confirmed / not_found / unclear         |
+| `refinement`      | Claude Sonnet              | Extract new plot details from conversation, build richer query  |
+| `qa_agent`        | Claude Sonnet + IMDb tools | ReAct agent for open-ended movie Q&A                            |
+| `dead_end`        | —                          | Graceful exit after max refinement cycles                       |
 
 ### Event-driven design
 
 Each user message triggers a new `graph.ainvoke()` call with the same
-`thread_id`.  State is persisted by the checkpointer (in-memory `MemorySaver`
-by default, swappable for Redis/Postgres).  No `interrupt()` / resume
+`thread_id`. State is persisted by the checkpointer (in-memory `MemorySaver`
+by default, swappable for Redis/Postgres). No `interrupt()` / resume
 complexity — the graph reads `phase` from state to decide which branch runs.
 
 ---
@@ -134,21 +134,21 @@ or interactive runs:
 cp .env.example .env
 ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `QDRANT_URL` | live runs | Qdrant Cloud cluster URL |
-| `QDRANT_API_KEY_RO` | live runs | Read-only Qdrant API key |
-| `QDRANT_COLLECTION_NAME` | optional | Collection name (default: `movies`) |
-| `OPENAI_API_KEY` | live runs | OpenAI embeddings for RAG queries |
-| `ANTHROPIC_API_KEY` | live runs | Claude models for confirmation, refinement, and Q&A |
-| `CLASSIFIER_MODEL` | optional | Default: `claude-haiku-4-5-20251001` |
-| `REASONING_MODEL` | optional | Default: `claude-sonnet-4-6` |
-| `RAG_TOP_K` | optional | Qdrant result count (default: `8`) |
-| `MAX_REFINEMENTS` | optional | Max refinement cycles before dead-end (default: `3`) |
-| `CONFIDENCE_THRESHOLD` | optional | Minimum IMDb match confidence (default: `0.3`) |
-| `LANGSMITH_TRACING` | optional | `true` to enable LangSmith tracing |
-| `LANGSMITH_API_KEY` | optional | LangSmith API key |
-| `LANGSMITH_PROJECT` | optional | LangSmith project name (default: `movie-finder`) |
+| Variable                 | Required  | Description                                          |
+| ------------------------ | --------- | ---------------------------------------------------- |
+| `QDRANT_URL`             | live runs | Qdrant Cloud cluster URL                             |
+| `QDRANT_API_KEY_RO`      | live runs | Read-only Qdrant API key                             |
+| `QDRANT_COLLECTION_NAME` | optional  | Collection name (default: `movies`)                  |
+| `OPENAI_API_KEY`         | live runs | OpenAI embeddings for RAG queries                    |
+| `ANTHROPIC_API_KEY`      | live runs | Claude models for confirmation, refinement, and Q&A  |
+| `CLASSIFIER_MODEL`       | optional  | Default: `claude-haiku-4-5-20251001`                 |
+| `REASONING_MODEL`        | optional  | Default: `claude-sonnet-4-6`                         |
+| `RAG_TOP_K`              | optional  | Qdrant result count (default: `8`)                   |
+| `MAX_REFINEMENTS`        | optional  | Max refinement cycles before dead-end (default: `3`) |
+| `CONFIDENCE_THRESHOLD`   | optional  | Minimum IMDb match confidence (default: `0.3`)       |
+| `LANGSMITH_TRACING`      | optional  | `true` to enable LangSmith tracing                   |
+| `LANGSMITH_API_KEY`      | optional  | LangSmith API key                                    |
+| `LANGSMITH_PROJECT`      | optional  | LangSmith project name (default: `movie-finder`)     |
 
 `make test` and `make test-coverage` do not require live Qdrant or LLM
 credentials because the test suite fully stubs those integrations.
@@ -209,7 +209,7 @@ async for event in graph.astream_events(
             print(chunk.content, end="", flush=True)
 ```
 
-### FastAPI integration (future)
+### FastAPI integration
 
 ```python
 from fastapi import FastAPI
@@ -247,12 +247,12 @@ make test-coverage
 
 ### Test coverage targets
 
-| Module | What's tested |
-|---|---|
-| `test_rag_service.py` | `MovieSearchService.search()`, `_to_list()` edge cases |
-| `test_nodes.py` | Every node function (mocked LLM, IMDB, and RAG deps) |
-| `test_graph.py` | Routing functions, graph compilation, node registration |
-| `test_models.py` | Pydantic models: defaults, validation, round-trip serialisation |
+| Module                | What's tested                                                   |
+| --------------------- | --------------------------------------------------------------- |
+| `test_rag_service.py` | `MovieSearchService.search()`, `_to_list()` edge cases          |
+| `test_nodes.py`       | Every node function (mocked LLM, IMDB, and RAG deps)            |
+| `test_graph.py`       | Routing functions, graph compilation, node registration         |
+| `test_models.py`      | Pydantic models: defaults, validation, round-trip serialisation |
 
 ---
 
@@ -314,13 +314,13 @@ their latencies.
 
 ## Dependencies
 
-| Package | Purpose |
-|---|---|
-| `langgraph` | Stateful graph runtime |
-| `langchain-anthropic` | Claude models (classifier + Q&A agent) |
-| `langchain-core` | Message types, tool protocol |
-| `langsmith` | Observability / tracing |
-| `imdbapi-client` | IMDb REST API client (path dep from `../imdbapi`) |
-| `openai` | `text-embedding-3-large` for RAG query embedding |
-| `qdrant-client` | Vector search against the movie plot collection |
-| `pydantic-settings` | Env-var configuration with validation |
+| Package               | Purpose                                                             |
+| --------------------- | ------------------------------------------------------------------- |
+| `langgraph`           | Stateful graph runtime                                              |
+| `langchain-anthropic` | Claude models (classifier + Q&A agent)                              |
+| `langchain-core`      | Message types, tool protocol                                        |
+| `langsmith`           | Observability / tracing                                             |
+| `imdbapi-client`      | IMDb REST API client (path dep from `./imdbapi` — nested submodule) |
+| `openai`              | `text-embedding-3-large` for RAG query embedding                    |
+| `qdrant-client`       | Vector search against the movie plot collection                     |
+| `pydantic-settings`   | Env-var configuration with validation                               |

@@ -27,11 +27,13 @@ now uses a Docker-only local workflow from `backend/chain/`.
 ### Start the repo-local dev container
 
 ```bash
-cp .env.example .env && $EDITOR .env
-make dev
+make init               # build image, create .env from template, install git hook
+cp .env.example .env    # if .env was not created automatically
+$EDITOR .env
+make editor-up          # start container for VS Code attach
 ```
 
-Keep `make dev` running in one terminal. In another terminal, use the
+Keep `make editor-up` running in one terminal. In another terminal, use the
 repo-local targets:
 
 ```bash
@@ -43,7 +45,7 @@ make test-coverage
 make pre-commit
 ```
 
-If you use VS Code, attach to the running `chain` container after `make dev`.
+If you use VS Code, attach to the running `chain` container after `make editor-up`.
 The committed `.vscode/` settings, tasks, and launch configs assume that
 attached-container workflow.
 
@@ -173,6 +175,7 @@ class MovieFinderState(TypedDict):
 ## Modifying prompts
 
 Prompts live in two places:
+
 - `prompts/` — reference copies for easy reading/editing
 - `src/chain/prompts/` — the copies actually loaded by the package at runtime (via `importlib.resources`)
 
