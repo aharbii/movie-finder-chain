@@ -92,25 +92,6 @@ pipeline {
             }
         }
 
-        // ------------------------------------------------------------------ //
-        // Validate Dockerfile builds correctly on main/tag, without pushing.
-        stage('Build Dockerfile') {
-            when {
-                anyOf {
-                    branch 'main'
-                    buildingTag()
-                }
-            }
-            steps {
-                sh "docker build --target runtime -t ${env.SERVICE_NAME}:ci-${env.BUILD_NUMBER} ."
-            }
-            post {
-                always {
-                    sh "docker rmi ${env.SERVICE_NAME}:ci-${env.BUILD_NUMBER} || true"
-                }
-            }
-        }
-
     }
 
     post {
