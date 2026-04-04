@@ -5,7 +5,7 @@ All OpenAI and Qdrant calls are mocked — no real network traffic.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -79,12 +79,12 @@ def test_search_returns_rag_candidates(
     embedding_response = MagicMock()
     embedding_response.data = [MagicMock(embedding=[0.1] * 3072)]
     embedding_response.usage.total_tokens = 10
-    service._openai.embeddings.create.return_value = embedding_response
+    cast(Any, service._openai.embeddings).create.return_value = embedding_response
 
     # Arrange: Qdrant returns our fake points
     qdrant_response = MagicMock()
     qdrant_response.points = fake_qdrant_points
-    service._qdrant.query_points.return_value = qdrant_response
+    cast(Any, service._qdrant).query_points.return_value = qdrant_response
 
     # Act
     results = service.search("a heist movie set in dreams", top_k=3)
@@ -100,15 +100,15 @@ def test_search_uses_correct_embedding_model(
     embedding_response = MagicMock()
     embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
     embedding_response.usage.total_tokens = 5
-    service._openai.embeddings.create.return_value = embedding_response
+    cast(Any, service._openai.embeddings).create.return_value = embedding_response
 
     qdrant_response = MagicMock()
     qdrant_response.points = []
-    service._qdrant.query_points.return_value = qdrant_response
+    cast(Any, service._qdrant).query_points.return_value = qdrant_response
 
     service.search("test query")
 
-    service._openai.embeddings.create.assert_called_once_with(
+    cast(Any, service._openai.embeddings).create.assert_called_once_with(
         input="test query",
         model=service._embedding_model,
     )
@@ -120,15 +120,15 @@ def test_search_uses_correct_collection(
     embedding_response = MagicMock()
     embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
     embedding_response.usage.total_tokens = 5
-    service._openai.embeddings.create.return_value = embedding_response
+    cast(Any, service._openai.embeddings).create.return_value = embedding_response
 
     qdrant_response = MagicMock()
     qdrant_response.points = []
-    service._qdrant.query_points.return_value = qdrant_response
+    cast(Any, service._qdrant).query_points.return_value = qdrant_response
 
     service.search("test query", top_k=5)
 
-    call_kwargs = service._qdrant.query_points.call_args
+    call_kwargs = cast(Any, service._qdrant.query_points).call_args
     assert call_kwargs.kwargs["collection_name"] == service._collection
     assert call_kwargs.kwargs["limit"] == 5
 
@@ -140,11 +140,11 @@ def test_search_normalises_genre_string(
     embedding_response = MagicMock()
     embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
     embedding_response.usage.total_tokens = 5
-    service._openai.embeddings.create.return_value = embedding_response
+    cast(Any, service._openai.embeddings).create.return_value = embedding_response
 
     qdrant_response = MagicMock()
     qdrant_response.points = fake_qdrant_points
-    service._qdrant.query_points.return_value = qdrant_response
+    cast(Any, service._qdrant).query_points.return_value = qdrant_response
 
     results = service.search("query")
 
@@ -162,11 +162,11 @@ def test_search_handles_missing_year(
     embedding_response = MagicMock()
     embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
     embedding_response.usage.total_tokens = 5
-    service._openai.embeddings.create.return_value = embedding_response
+    cast(Any, service._openai.embeddings).create.return_value = embedding_response
 
     qdrant_response = MagicMock()
     qdrant_response.points = fake_qdrant_points
-    service._qdrant.query_points.return_value = qdrant_response
+    cast(Any, service._qdrant).query_points.return_value = qdrant_response
 
     results = service.search("query")
     ghost = next(r for r in results if r.title == "Ghost Movie")
@@ -178,11 +178,11 @@ def test_search_empty_results(service: MovieSearchService) -> None:
     embedding_response = MagicMock()
     embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
     embedding_response.usage.total_tokens = 3
-    service._openai.embeddings.create.return_value = embedding_response
+    cast(Any, service._openai.embeddings).create.return_value = embedding_response
 
     qdrant_response = MagicMock()
     qdrant_response.points = []
-    service._qdrant.query_points.return_value = qdrant_response
+    cast(Any, service._qdrant).query_points.return_value = qdrant_response
 
     results = service.search("obscure movie nobody remembers")
     assert results == []

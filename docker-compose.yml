@@ -18,9 +18,11 @@ services:
       dockerfile: chain/Dockerfile
       target: dev
     image: movie-finder-chain:dev
-    working_dir: /workspace/chain
+    working_dir: /workspace
     command: ["sleep", "infinity"]
     environment:
+      GIT_DIR: /workspace/.gitdir
+      GIT_WORK_TREE: /workspace
       # --- Qdrant ---
       QDRANT_URL: ${QDRANT_URL:-}
       QDRANT_API_KEY_RO: ${QDRANT_API_KEY_RO:-}
@@ -45,11 +47,10 @@ services:
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.3}
       # --- Logging ---
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      # --- Shell ---
-      SHELL: /bin/zsh
     volumes:
-      - .:/workspace/chain:cached
-      - ../imdbapi:/workspace/imdbapi:cached
+      - .:/workspace:cached
+      - ../imdbapi:/imdbapi:cached
+      - ${CHAIN_GIT_DIR:-.git}:/workspace/.gitdir
       - uv_cache:/root/.cache/uv
       - pre_commit_cache:/root/.cache/pre-commit
     stdin_open: true

@@ -4,6 +4,15 @@ version = "0.1.0"
 description = "LangGraph pipeline for movie discovery and Q&A"
 license = { text = "MIT" }
 requires-python = ">=3.13"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
 dependencies = [
     "imdbapi-client",
     "langgraph>=0.2.0",
@@ -13,17 +22,14 @@ dependencies = [
     "langsmith>=0.1.0",
     "qdrant-client>=1.17.1",
     "openai>=2.29.0",
-    "pydantic>=2.10.0",
+    "pydantic>=2.12.5",
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
     "langchain>=1.2.13",
 ]
 
 [dependency-groups]
-lint = [
-    "ruff>=0.9.0",
-    "mypy>=1.14.0",
-]
+lint = ["ruff>=0.15.9", "mypy>=1.20.0"]
 test = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.25.0",
@@ -33,6 +39,8 @@ test = [
 dev = [
     { include-group = "lint" },
     { include-group = "test" },
+    "pre-commit>=4.5.1",
+    "detect-secrets>=1.5.0",
 ]
 
 [tool.uv]
@@ -43,7 +51,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-imdbapi-client = { workspace = true }
+imdbapi-client = { path = "../imdbapi" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/chain"]
@@ -51,18 +59,29 @@ packages = ["src/chain"]
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "examples"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM"]
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["chain"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.mypy]
 python_version = "3.13"
+mypy_path = "src:tests:examples"
 strict = true
-ignore_missing_imports = true
-mypy_path = "src"
 explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 # langchain_anthropic stubs require `timeout` and `stop` as positional args in
@@ -79,6 +98,14 @@ module = "chain.nodes.qa_agent"
 disable_error_code = ["call-arg", "call-overload"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+pythonpath = ["src"]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 addopts = ["-v", "--tb=short"]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "examples/*", "*/py.typed"]
+
+[tool.coverage.report]
+show_missing = true

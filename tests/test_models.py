@@ -64,7 +64,7 @@ class TestEnrichedMovie:
     def _make(self, **kwargs: object) -> EnrichedMovie:
         base: dict[str, object] = {"rag_title": "Inception", "rag_year": 2010}
         base.update(kwargs)
-        return EnrichedMovie(**base)  # type: ignore[arg-type]
+        return EnrichedMovie(**base)
 
     def test_minimal_required_fields(self) -> None:
         m = self._make()

@@ -17,8 +17,10 @@
 # 'docker compose exec' instead of a new container — faster for interactive dev.
 # =============================================================================
 
-.PHONY: help init up dev down editor-up editor-down logs shell lint format fix typecheck \
-	test test-coverage pre-commit ci-down check example-basic example-streaming
+.PHONY: help init build setup clean \
+	editor-up editor-down ci-down shell logs up down  run run-dev clean-docker \
+	lint format fix typecheck test test-coverage pre-commit detect-secrets check \
+	example-basic example-streaming
 
 .DEFAULT_GOAL := help
 
@@ -27,8 +29,10 @@ SERVICE ?= chain
 GIT_DIR_HOST := $(shell git rev-parse --git-dir)
 GIT_HOOKS_DIR := $(GIT_DIR_HOST)/hooks
 
-CHAIN_PATHS := src tests examples chat.py
-COVERAGE_XML ?= chain-coverage.xml
+export CHAIN_GIT_DIR := ${GIT_DIR_HOST}
+
+SOURCE_PATHS := .
+COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML ?= htmlcov/chain
 
 # ---------------------------------------------------------------------------
@@ -49,30 +53,40 @@ help:
 	@echo "======================================"
 	@echo ""
 	@echo "  Setup"
-	@echo "    init             Build image, create .env from template, install git hook"
+	@echo "    init           Build image, create .env from template, install git hook"
+	@echo ""
+	@echo "  Editor"
+	@echo "    editor-up      Start the attached-container workspace in the background"
+	@echo "    editor-down    Stop the local workspace container"
+	@echo "    shell          Open a bash shell in the workspace container"
 	@echo ""
 	@echo "  Lifecycle"
-	@echo "    up               Start the persistent dev container (alias for editor-up)"
-	@echo "    down             Stop the dev container"
-	@echo "    editor-up        Start a headless container for IDE attachment"
-	@echo "    editor-down      Stop the IDE-attached container"
-	@echo "    logs             Tail logs from the running container"
-	@echo "    shell            Open a zsh shell in the running container"
+	@echo "    up             Alias for editor-up"
+	@echo "    down           Alias for editor-down"
+	@echo "    logs           Follow workspace container logs"
+	@echo "    ci-down        Full cleanup for CI: stop containers, remove volumes + local images"
 	@echo ""
 	@echo "  Quality"
-	@echo "    lint             Run ruff check (report only)"
-	@echo "    format           Run ruff format (apply)"
-	@echo "    fix              Run ruff check --fix + ruff format (apply all auto-fixes)"
-	@echo "    typecheck        Run mypy --strict"
-	@echo "    test             Run pytest"
-	@echo "    test-coverage    Run pytest with coverage XML/HTML output"
-	@echo "    pre-commit       Run all pre-commit hooks"
-	@echo "    check            lint + typecheck + test-coverage"
+	@echo "    lint           Run ruff check (report only)"
+	@echo "    format         Run ruff format (apply)"
+	@echo "    fix            Run ruff check --fix + ruff format (apply all auto-fixes)"
+	@echo "    typecheck      Run mypy --strict"
+	@echo "    test           Run pytest"
+	@echo "    test-coverage  Run pytest with coverage + JUnit output"
+	@echo "    detect-secrets Run detect-secrets scan"
+	@echo "    pre-commit     Run all pre-commit hooks"
+	@echo "    check          lint + typecheck + test-coverage"
 	@echo ""
-	@echo "  CI"
-	@echo "    ci-down          Hard cleanup for CI (down -v --rmi local)"
+	@echo "  Maintenance"
+	@echo "    clean          Remove __pycache__, .pytest_cache, .mypy_cache, reports (via Docker)"
+	@echo "    clean-docker   Stop containers, remove volumes + local images"
 	@echo ""
-	@echo "  Examples"
+	@echo "  Compatibility aliases"
+	@echo "    build          Alias for init"
+	@echo "    run / run-dev  Alias for editor-up"
+	@echo "    setup          Alias for init"
+	@echo ""
+	@echo "  Apps"
 	@echo "    example-basic    Run examples/basic_usage.py inside Docker"
 	@echo "    example-streaming Run examples/streaming_example.py inside Docker"
 	@echo ""
@@ -84,59 +98,82 @@ init:
 	@chmod +x $(GIT_HOOKS_DIR)/pre-commit
 	@echo ">>> git pre-commit hook installed (calls 'make pre-commit' on every commit)"
 
-up: editor-up
-
-down:
-	$(COMPOSE) down
+build: init
+setup: init
 
 editor-up:
 	$(COMPOSE) up -d $(SERVICE)
 
-editor-down: down
+up: editor-up
+run: editor-up
+run-dev: editor-up
+
+editor-down:
+	$(COMPOSE) down --remove-orphans
+
+down: editor-down
+
+ci-down:
+	$(COMPOSE) down -v --remove-orphans
 
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
 
 shell:
 	@if $(COMPOSE) ps --services --status running 2>/dev/null | grep -qx "$(SERVICE)"; then \
-		$(COMPOSE) exec $(SERVICE) zsh; \
+		$(COMPOSE) exec $(SERVICE) bash; \
 	else \
-		$(COMPOSE) run --rm $(SERVICE) zsh; \
+		$(COMPOSE) run --rm $(SERVICE) bash; \
 	fi
 
 lint:
-	$(call exec_or_run,ruff check $(CHAIN_PATHS))
+	$(call exec_or_run,ruff check $(SOURCE_PATHS))
 
 format:
-	$(call exec_or_run,ruff format $(CHAIN_PATHS))
+	$(call exec_or_run,ruff format $(SOURCE_PATHS))
 
 fix:
-	$(call exec_or_run,ruff check --fix $(CHAIN_PATHS))
-	$(call exec_or_run,ruff format $(CHAIN_PATHS))
+	$(call exec_or_run,ruff check --fix $(SOURCE_PATHS))
+	$(call exec_or_run,ruff format $(SOURCE_PATHS))
 
 typecheck:
-	$(call exec_or_run,mypy src)
+	$(call exec_or_run,mypy $(SOURCE_PATHS))
 
 test:
 	$(call exec_or_run,pytest tests/ --asyncio-mode=auto -v --tb=short)
 
 test-coverage:
 	$(call exec_or_run,pytest tests/ --asyncio-mode=auto -v --tb=short \
+		--junitxml=$(JUNIT_XML) \
 		--cov=chain \
 		--cov-report=term-missing \
 		--cov-report=xml:$(COVERAGE_XML) \
 		--cov-report=html:$(COVERAGE_HTML))
 
+detect-secrets:
+	$(call exec_or_run,detect-secrets scan --baseline .secrets.baseline)
+
 pre-commit:
 	$(call exec_or_run,pre-commit run --all-files)
 
-ci-down:
-	$(COMPOSE) down -v --rmi local
-
 check: lint typecheck test-coverage
 
+clean:
+	@echo ">>> Removing Python cache files (via Docker)..."
+	$(call exec_or_run,find . -type d -name "__pycache__" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	$(call exec_or_run,find . -type d -name ".pytest_cache" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	$(call exec_or_run,find . -type d -name ".mypy_cache" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	$(call exec_or_run,find . -type d -name ".ruff_cache" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	$(call exec_or_run,find . -name "*.egg-info" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	$(call exec_or_run,find . -name "$(COVERAGE_XML)" -not -path "./.git/*" -delete 2>/dev/null || true)
+	$(call exec_or_run,find . -name "test-results.xml" -not -path "./.git/*" -delete 2>/dev/null || true)
+	$(call exec_or_run,find . -type d -name "htmlcov" -not -path "./.git/*" -exec rm -rf {} + 2>/dev/null || true)
+	@echo "Clean complete."
+
+clean-docker: ci-down
+
 example-basic:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) python examples/basic_usage.py
+	$(call exec_or_run,python examples/basic_usage.py)
 
 example-streaming:
-	$(COMPOSE) run --rm --no-deps $(SERVICE) python examples/streaming_example.py
+	$(call exec_or_run,python examples/streaming_example.py)

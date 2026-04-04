@@ -21,20 +21,12 @@ ENV PYTHONUNBUFFERED=1 \
 # ---- Stage 1: dev -----------------------------------------------------------
 FROM uv-base AS dev
 
-# Install only what the attached-container workflow actually needs:
-#   git   — pre-commit hooks and submodule ops
-#   zsh   — make shell target
-#   make  — run make targets from inside the container when needed
-#   curl  — occasional HTTP debugging / health checks
-# keep-sorted start
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     make \
-    zsh \
     && rm -rf /var/lib/apt/lists/*
-# keep-sorted end
+
+RUN git config --global --add safe.directory /workspace
 
 WORKDIR /workspace
 
@@ -42,22 +34,15 @@ RUN python -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH" \
     VIRTUAL_ENV="/opt/venv" \
-    PYTHONPATH="/workspace/chain/src:/workspace/imdbapi/src" \
-    SHELL=/bin/zsh
+    PYTHONPATH="/workspace/src:/imdbapi/src"
 
-COPY pyproject.toml uv.lock* ./
+# Copy manifests for current repo AND its path dependency for resolution.
+# Context is assumed to be the parent directory (backend/) if built via Makefile.
+COPY chain/pyproject.toml chain/uv.lock* chain/README.md ./
+COPY imdbapi/pyproject.toml imdbapi/README.md /imdbapi/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ -f uv.lock ]; then \
-        uv sync --frozen --all-groups --active --no-install-workspace; \
-    else \
-        uv sync --all-groups --active --no-install-workspace; \
-    fi && \
-    /opt/venv/bin/pip install --no-cache-dir pre-commit
-
-# Minimal zsh config — no internet download, no heavy themes.
-RUN printf 'export PS1="[chain] %n@%m:%~%% "\nalias ls="ls --color=auto"\nalias ll="ls -alF"\n' \
-    > /root/.zshrc
+    uv sync --all-packages --all-groups --active --no-install-workspace
 
 CMD ["sleep", "infinity"]
 
@@ -71,11 +56,7 @@ COPY pyproject.toml uv.lock* ./
 COPY src ./src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ -f uv.lock ]; then \
-        uv sync --frozen --no-dev --no-editable; \
-    else \
-        uv sync --no-dev --no-editable; \
-    fi
+    uv sync --frozen --no-dev --no-editable --no-install-project
 
 
 # ---- Stage 3: runtime -------------------------------------------------------

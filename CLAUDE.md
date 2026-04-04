@@ -16,7 +16,7 @@ LangGraph 8-node AI pipeline — the core intelligence layer of Movie Finder.
 - **Models:** Claude Sonnet for confirmation/refinement/Q&A flows
 - **Embeddings:** OpenAI `text-embedding-3-large` at query time (must match ingestion)
 - **Vector search:** Qdrant Cloud (always external)
-- **IMDb enrichment:** via `imdbapi` workspace member
+- **IMDb enrichment:** via `imdbapi` submodule (path dependency)
 - **Bounded refinement:** max 3 cycles (`MAX_REFINEMENTS`)
 - **Tracing:** LangSmith (opt-in via `LANGSMITH_TRACING=true`)
 - **uv workspace member** of `backend/`
@@ -62,7 +62,7 @@ src/chain/
 | LLM | `langchain-anthropic` — Claude Sonnet for confirmation/refinement/Q&A flows |
 | Embeddings | `langchain-openai` — `text-embedding-3-large` (3072-dim) |
 | Vector store | `qdrant-client` (Qdrant Cloud — always external) |
-| IMDb | `imdbapi` workspace member |
+| IMDb | `imdbapi` submodule (path dependency) |
 | Tracing | LangSmith (`LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`) |
 | Linting | `ruff` (line-length 100) · `mypy --strict` |
 | Tests | `pytest --asyncio-mode=auto`, verbose |

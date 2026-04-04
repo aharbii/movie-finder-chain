@@ -292,7 +292,9 @@ class TestPresentationNode:
         assert "Inception" in result["messages"][0].content
 
     @pytest.mark.asyncio
-    async def test_sets_phase_to_confirmation(self, sample_enriched_movies: list[dict[str, Any]]) -> None:
+    async def test_sets_phase_to_confirmation(
+        self, sample_enriched_movies: list[dict[str, Any]]
+    ) -> None:
         state = {"enriched_movies": sample_enriched_movies, "refinement_count": 0}
         result = await presentation_node(state)  # type: ignore[arg-type]
         assert result["phase"] == "confirmation"
@@ -607,9 +609,7 @@ class TestQaAgentNode:
         """Agent response is appended as new messages."""
         ai_response = AIMessage(content="Inception is rated PG-13.")
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(
-            return_value={"messages": [ai_response]}
-        )
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [ai_response]})
 
         state = {
             "messages": [HumanMessage(content="Is it for kids?")],
@@ -641,9 +641,7 @@ class TestQaAgentNode:
 
         mock_agent = AsyncMock()
         mock_agent.ainvoke = AsyncMock(
-            return_value={
-                "messages": [AIMessage(content="Stars include…")]
-            }
+            return_value={"messages": [AIMessage(content="Stars include…")]}
         )
 
         with (

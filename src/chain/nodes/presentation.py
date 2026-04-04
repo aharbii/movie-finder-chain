@@ -32,7 +32,9 @@ async def presentation_node(state: MovieFinderState) -> dict[str, Any]:
     if not movies:
         logger.info("No movies to present")
         return {
-            "messages": [AIMessage(content="I couldn't find any movies matching that description.")],
+            "messages": [
+                AIMessage(content="I couldn't find any movies matching that description.")
+            ],
             "phase": "discovery",  # Stay in discovery to let user try again
         }
 
@@ -72,7 +74,7 @@ def _format_list(movies: list[dict[str, Any]]) -> str:
         imdb_id = m.get("imdb_id", "—")
         lines.append(f"{i}. **{t}** ({y}) — *confidence: {conf:.0%}* [IMDb: {imdb_id}]")
 
-    lines.append("\nReply with the number, or say \"none of these\" to refine the search.")
+    lines.append('\nReply with the number, or say "none of these" to refine the search.')
     return "\n".join(lines)
 
 

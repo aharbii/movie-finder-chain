@@ -13,7 +13,7 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-json
-        exclude: ^\.vscode/  # VSCode config files use JSONC (comments allowed)
+        exclude: ^\.vscode/ # VSCode config files use JSONC (comments allowed)
       - id: check-ast
       - id: check-added-large-files
       - id: check-case-conflict
@@ -21,31 +21,31 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements
       - id: detect-private-key
+      - id: pretty-format-json
+        exclude: ^\.vscode/
+      - id: sort-simple-yaml
 
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        exclude: .env.example
+        args:
+          - --baseline
+          - .secrets.baseline
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.5.0
+    rev: v1.20.0
     hooks:
       - id: mypy
         language_version: python3.13
         additional_dependencies:
           - pydantic
           - pydantic-settings
-        args:
-          - --check-untyped-defs
-          - --disallow-untyped-defs
-          - --ignore-missing-imports
-          - --warn-return-any
-          - --warn-unused-ignores
-          - --show-error-codes
+          - pytest
+        args: [--config-file=pyproject.toml]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.13
+    rev: v0.15.9
     hooks:
       - id: ruff-check
         args: [--fix]

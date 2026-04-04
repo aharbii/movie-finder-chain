@@ -59,9 +59,7 @@ async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
         # We must NOT mutate the original message object in the graph state.
         last_user_msg = _last_human_message(messages)
         context_block = _build_system_prompt(confirmed)
-        augmented_msg = HumanMessage(
-            content=f"{context_block}\n\n---\n\n{last_user_msg.content}"
-        )
+        augmented_msg = HumanMessage(content=f"{context_block}\n\n---\n\n{last_user_msg.content}")
 
         logger.info(f"Executing Q&A agent for movie: {confirmed.get('imdb_title')}")
 

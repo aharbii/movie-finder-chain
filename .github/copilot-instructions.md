@@ -16,7 +16,7 @@ Parent project: `aharbii/movie-finder` — all issues created there first, then 
 | `embed` | OpenAI `text-embedding-3-large` (3072-dim) — embeds the user query |
 | `search` | Qdrant Cloud vector search — retrieves candidate movies |
 | `confirm` | Claude Sonnet — selects the best match from candidates |
-| `imdb_fetch` | Calls `imdbapi` client for live metadata enrichment |
+| `imdb_fetch` | Calls `imdbapi` client (independent submodule) for live metadata enrichment |
 | `answer` | Claude Sonnet — streams the final answer via SSE |
 | `clarify` | Claude Haiku — asks follow-up when intent is ambiguous |
 | `fallback` | Handles no-match and error paths |

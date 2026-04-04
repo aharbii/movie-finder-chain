@@ -73,7 +73,7 @@ def main(*, write_png: bool = True) -> None:
     # ------------------------------------------------------------------ #
     if write_png:
         try:
-            from langchain_core.runnables.graph_mermaid import MermaidDrawMethod
+            from langgraph.graph.mermaid import MermaidDrawMethod
 
             png_bytes: bytes = draw.draw_mermaid_png(
                 draw_method=MermaidDrawMethod.PYPPETEER,  # renders locally, no internet needed

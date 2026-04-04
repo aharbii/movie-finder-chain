@@ -8,6 +8,8 @@ Foundational mandate for `movie-finder-chain` (`backend/chain/`).
 LangGraph 8-node AI pipeline.
 `classify` → `search_rag` → `enrich_imdb` → `reason` → `route` → `refine` / `confirm` / `answer`
 
+IMDb enrichment is performed via the `imdbapi` submodule (path dependency).
+
 ---
 
 ## Technology stack

@@ -9,7 +9,10 @@ the compiled object exposes the expected interface.
 
 from __future__ import annotations
 
+from typing import cast
+
 from chain.graph import _route_after_confirmation, _route_by_phase, compile_graph
+from chain.state import MovieFinderState
 
 # ===========================================================================
 # _route_by_phase  (pure function — no external deps)
@@ -18,22 +21,24 @@ from chain.graph import _route_after_confirmation, _route_by_phase, compile_grap
 
 class TestRouteByPhase:
     def test_default_routes_to_rag_search(self) -> None:
-        assert _route_by_phase({}) == "rag_search"
+        assert _route_by_phase(cast(MovieFinderState, {})) == "rag_search"
 
     def test_discovery_routes_to_rag_search(self) -> None:
-        assert _route_by_phase({"phase": "discovery"}) == "rag_search"
+        assert _route_by_phase(cast(MovieFinderState, {"phase": "discovery"})) == "rag_search"
 
     def test_confirmation_routes_to_confirmation(self) -> None:
-        assert _route_by_phase({"phase": "confirmation"}) == "confirmation"
+        assert _route_by_phase(cast(MovieFinderState, {"phase": "confirmation"})) == "confirmation"
 
     def test_qa_routes_to_qa_agent(self) -> None:
-        assert _route_by_phase({"phase": "qa"}) == "qa_agent"
+        assert _route_by_phase(cast(MovieFinderState, {"phase": "qa"})) == "qa_agent"
 
     def test_unknown_phase_falls_back_to_rag_search(self) -> None:
-        assert _route_by_phase({"phase": "unknown_gibberish"}) == "rag_search"
+        assert (
+            _route_by_phase(cast(MovieFinderState, {"phase": "unknown_gibberish"})) == "rag_search"
+        )
 
     def test_none_phase_routes_to_rag_search(self) -> None:
-        assert _route_by_phase({"phase": None}) == "rag_search"  # type: ignore[typeddict-item]
+        assert _route_by_phase(cast(MovieFinderState, {"phase": None})) == "rag_search"
 
 
 # ===========================================================================
@@ -43,28 +48,37 @@ class TestRouteByPhase:
 
 class TestRouteAfterConfirmation:
     def test_confirmed_routes_to_qa_agent(self) -> None:
-        assert _route_after_confirmation({"next_action": "confirmed"}) == "qa_agent"
+        assert (
+            _route_after_confirmation(cast(MovieFinderState, {"next_action": "confirmed"}))
+            == "qa_agent"
+        )
 
     def test_refine_routes_to_refinement(self) -> None:
-        assert _route_after_confirmation({"next_action": "refine"}) == "refinement"
+        assert (
+            _route_after_confirmation(cast(MovieFinderState, {"next_action": "refine"}))
+            == "refinement"
+        )
 
     def test_exhausted_routes_to_dead_end(self) -> None:
-        assert _route_after_confirmation({"next_action": "exhausted"}) == "dead_end"
+        assert (
+            _route_after_confirmation(cast(MovieFinderState, {"next_action": "exhausted"}))
+            == "dead_end"
+        )
 
     def test_wait_routes_to_end(self) -> None:
         from langgraph.graph import END
 
-        assert _route_after_confirmation({"next_action": "wait"}) == END
+        assert _route_after_confirmation(cast(MovieFinderState, {"next_action": "wait"})) == END
 
     def test_missing_next_action_defaults_to_end(self) -> None:
         from langgraph.graph import END
 
-        assert _route_after_confirmation({}) == END
+        assert _route_after_confirmation(cast(MovieFinderState, {})) == END
 
     def test_none_next_action_defaults_to_end(self) -> None:
         from langgraph.graph import END
 
-        assert _route_after_confirmation({"next_action": None}) == END  # type: ignore[typeddict-item]
+        assert _route_after_confirmation(cast(MovieFinderState, {"next_action": None})) == END
 
 
 # ===========================================================================

@@ -9,7 +9,7 @@
 // NOTE: This image is NOT pushed to ACR. chain is an internal Python library
 // imported by the backend app; only the backend app image is published to ACR.
 //
-// Required Jenkins plugins: Docker Pipeline, JUnit, Cobertura, Credentials Binding
+// Required Jenkins plugins: Docker Pipeline, JUnit, Coverage, Credentials Binding
 // =============================================================================
 
 pipeline {
@@ -54,9 +54,20 @@ pipeline {
             }
             post {
                 always {
-                    cobertura coberturaReportFile: 'chain-coverage.xml',
-                              onlyStable: false,
-                              failNoReports: false
+                    junit allowEmptyResults: true, testResults: 'test-results.xml'
+                    recordCoverage(
+                        tools: [
+                            [parser: 'COBERTURA', pattern: 'coverage.xml']
+                        ],
+                        id: 'coverage',
+                        name: 'Chain Coverage',
+                        sourceCodeRetention: 'EVERY_BUILD',
+                        failOnError: false,
+                        qualityGates: [
+                            [threshold: 10.0, metric: 'LINE', baseline: 'PROJECT', unstable: true],
+                            [threshold: 10.0, metric: 'BRANCH', baseline: 'PROJECT', unstable: true]
+                        ]
+                    )
                 }
             }
         }
@@ -84,6 +95,7 @@ pipeline {
 
     post {
         always {
+            sh 'make clean || true'
             sh 'make ci-down || true'
             cleanWs()
         }

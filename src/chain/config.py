@@ -60,9 +60,7 @@ class ChainConfig(BaseSettings):
 
     # --- LangSmith ---
     langsmith_tracing: bool = Field(False, alias="LANGSMITH_TRACING")
-    langsmith_endpoint: str = Field(
-        "https://api.smith.langchain.com", alias="LANGSMITH_ENDPOINT"
-    )
+    langsmith_endpoint: str = Field("https://api.smith.langchain.com", alias="LANGSMITH_ENDPOINT")
     langsmith_api_key: str | None = Field(None, alias="LANGSMITH_API_KEY")
     langsmith_project: str = Field("movie-finder", alias="LANGSMITH_PROJECT")
 
@@ -101,4 +99,4 @@ def get_config() -> ChainConfig:
     Returns:
         The singleton ChainConfig.
     """
-    return ChainConfig()  # type: ignore[call-arg]
+    return ChainConfig()
