@@ -41,32 +41,32 @@ src/chain/
 
 ### Submodule map
 
-| Path | GitHub repo | Role |
-|---|---|---|
-| `.` (root) | `aharbii/movie-finder` | Parent — all cross-repo issues |
-| `backend/` | `aharbii/movie-finder-backend` | FastAPI + uv workspace root |
-| `backend/app/` | (nested in backend) | FastAPI application layer |
-| `backend/chain/` | `aharbii/movie-finder-chain` | **← you are here** |
-| `backend/imdbapi/` | `aharbii/imdbapi-client` | Async IMDb REST client |
-| `backend/rag_ingestion/` | `aharbii/movie-finder-rag` | Offline embedding ingestion |
-| `frontend/` | `aharbii/movie-finder-frontend` | Angular 21 SPA |
-| `docs/` | `aharbii/movie-finder-docs` | MkDocs documentation |
-| `infrastructure/` | `aharbii/movie-finder-infrastructure` | IaC / Azure provisioning |
+| Path                     | GitHub repo                           | Role                           |
+| ------------------------ | ------------------------------------- | ------------------------------ |
+| `.` (root)               | `aharbii/movie-finder`                | Parent — all cross-repo issues |
+| `backend/`               | `aharbii/movie-finder-backend`        | FastAPI + uv workspace root    |
+| `backend/app/`           | (nested in backend)                   | FastAPI application layer      |
+| `backend/chain/`         | `aharbii/movie-finder-chain`          | **← you are here**             |
+| `backend/chain/imdbapi/` | `aharbii/imdbapi-client`              | Async IMDb REST client         |
+| `backend/rag_ingestion/` | `aharbii/movie-finder-rag`            | Offline embedding ingestion    |
+| `frontend/`              | `aharbii/movie-finder-frontend`       | Angular 21 SPA                 |
+| `docs/`                  | `aharbii/movie-finder-docs`           | MkDocs documentation           |
+| `infrastructure/`        | `aharbii/movie-finder-infrastructure` | IaC / Azure provisioning       |
 
 ### Technology stack
 
-| Layer | Stack |
-|---|---|
-| Language | Python 3.13, uv workspace member |
-| AI pipeline | LangGraph 0.2+, LangChain 0.3+ |
-| LLM | `langchain-anthropic` — Claude Sonnet for confirmation/refinement/Q&A flows |
-| Embeddings | `langchain-openai` — `text-embedding-3-large` (3072-dim) |
-| Vector store | `qdrant-client` (Qdrant Cloud — always external) |
-| IMDb | `imdbapi` submodule (path dependency) |
-| Tracing | LangSmith (`LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`) |
-| Linting | `ruff` (line-length 100) · `mypy --strict` |
-| Tests | `pytest --asyncio-mode=auto`, verbose |
-| CI | Jenkins Multibranch → Azure Container Registry |
+| Layer        | Stack                                                                       |
+| ------------ | --------------------------------------------------------------------------- |
+| Language     | Python 3.13, uv workspace member                                            |
+| AI pipeline  | LangGraph 0.2+, LangChain 0.3+                                              |
+| LLM          | `langchain-anthropic` — Claude Sonnet for confirmation/refinement/Q&A flows |
+| Embeddings   | `langchain-openai` — `text-embedding-3-large` (3072-dim)                    |
+| Vector store | `qdrant-client` (Qdrant Cloud — always external)                            |
+| IMDb         | `imdbapi` submodule (path dependency)                                       |
+| Tracing      | LangSmith (`LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`)   |
+| Linting      | `ruff` (line-length 100) · `mypy --strict`                                  |
+| Tests        | `pytest --asyncio-mode=auto`, verbose                                       |
+| CI           | Jenkins Multibranch → Azure Container Registry                              |
 
 ### Environment variables (`.env.example`)
 
@@ -86,14 +86,14 @@ LANGSMITH_TRACING=false, LANGSMITH_ENDPOINT, LANGSMITH_API_KEY, LANGSMITH_PROJEC
 
 ## Design patterns to follow
 
-| Pattern | Where | Rule |
-|---|---|---|
-| **State machine** | `graph.py` | New behaviour = new node or new edge. Never add conditional branching inside an existing node to handle a different phase. |
-| **Pure functions** | `nodes/` | Nodes take `MovieFinderState` and return a partial state update. No side effects except external I/O (LLM calls, Qdrant, IMDb). |
-| **Strategy** | LLM providers, embedding providers | New model = new configuration value, not a new code path. The provider interface stays the same. |
-| **Configuration object** | `config.py` | All settings loaded via `Pydantic BaseSettings` once at startup. Never `os.getenv()` inside node functions. |
-| **Adapter** | `rag/` wrapper | The Qdrant wrapper adapts the client library to the domain interface. Nodes never call `qdrant-client` directly. |
-| **Factory** | `graph.py` | Node creation and graph wiring is centralised here. Nodes are registered once. |
+| Pattern                  | Where                              | Rule                                                                                                                            |
+| ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **State machine**        | `graph.py`                         | New behaviour = new node or new edge. Never add conditional branching inside an existing node to handle a different phase.      |
+| **Pure functions**       | `nodes/`                           | Nodes take `MovieFinderState` and return a partial state update. No side effects except external I/O (LLM calls, Qdrant, IMDb). |
+| **Strategy**             | LLM providers, embedding providers | New model = new configuration value, not a new code path. The provider interface stays the same.                                |
+| **Configuration object** | `config.py`                        | All settings loaded via `Pydantic BaseSettings` once at startup. Never `os.getenv()` inside node functions.                     |
+| **Adapter**              | `rag/` wrapper                     | The Qdrant wrapper adapts the client library to the domain interface. Nodes never call `qdrant-client` directly.                |
+| **Factory**              | `graph.py`                         | Node creation and graph wiring is centralised here. Nodes are registered once.                                                  |
 
 **Critical state rule:** `MovieFinderState` has `total=False` (issue #15 — tracked, not yet fixed).
 When reading state fields in nodes, always use `.get()` with a safe default until this is resolved.
@@ -129,6 +129,7 @@ False positive → `# pragma: allowlist secret` + `detect-secrets scan > .secret
 ## VSCode setup
 
 `backend/chain/.vscode/` is committed with a full workspace configuration:
+
 - `settings.json` — attached-container Python interpreter (`/opt/venv/bin/python`), Ruff, mypy strict, pytest discovery
 - `extensions.json` — Remote Containers, Python, Pylance, debugpy, Ruff, mypy, Makefile tools, coverage gutters
 - `launch.json` — `chat.py` interactive runner + pytest all / current file inside the attached container
@@ -183,36 +184,39 @@ Conventional Commits: `feat(chain): add Gemini embedding support`
 
 Full detail in `ai-context/issue-agent-briefing-template.md`.
 
-| # | Category | Key gate |
-|---|---|---|
-| 1 | **Issues** | Parent `aharbii/movie-finder` + child here only if this repo changes; templates inspected |
-| 2 | **Branch** | `feature/fix/chore/docs` in this repo + pointer-bump `chore/` in `backend/` and root |
-| 3 | **ADR** | New LLM provider, embedding model, external dep, or pipeline architecture → ADR in `docs/` |
-| 4 | **Implementation** | State machine / Pure functions / Strategy / Factory patterns; `MovieFinderState` fields via `.get()` (#15); `ruff`+`mypy --strict` pass; pre-commit pass |
-| 5 | **Tests** | `pytest --asyncio-mode=auto` passes; coverage doesn't regress |
-| 6 | **Env & secrets** | `.env.example` updated here + `backend/` + `rag_ingestion/` if embedding changes + root; tuning params updated; new keys → Key Vault + Jenkins |
-| 7 | **Docker** | `Dockerfile` updated (workspace root context includes `imdbapi/` + `chain/`); compose updated |
-| 8 | **CI** | `Jenkinsfile` reviewed; LangSmith project name consistent with CI creds |
-| 9 | **Diagrams** | `04-langgraph-pipeline.puml`, `05-langgraph-statemachine.puml`, `09-seq-langgraph-execution.puml`; `workspace.dsl` if C4 changed; commit to `docs/` first; **never `.mdj`** |
-| 9a | **Docs** | `docs/` pages updated; SSE event shape change → verify `/docs` at `app/`; `README.md` + `CHANGELOG.md` updated |
+| #   | Category           | Key gate                                                                                                                                                                    |
+| --- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Issues**         | Parent `aharbii/movie-finder` + child here only if this repo changes; templates inspected                                                                                   |
+| 2   | **Branch**         | `feature/fix/chore/docs` in this repo + pointer-bump `chore/` in `backend/` and root                                                                                        |
+| 3   | **ADR**            | New LLM provider, embedding model, external dep, or pipeline architecture → ADR in `docs/`                                                                                  |
+| 4   | **Implementation** | State machine / Pure functions / Strategy / Factory patterns; `MovieFinderState` fields via `.get()` (#15); `ruff`+`mypy --strict` pass; pre-commit pass                    |
+| 5   | **Tests**          | `pytest --asyncio-mode=auto` passes; coverage doesn't regress                                                                                                               |
+| 6   | **Env & secrets**  | `.env.example` updated here + `backend/` + `rag_ingestion/` if embedding changes + root; tuning params updated; new keys → Key Vault + Jenkins                              |
+| 7   | **Docker**         | `Dockerfile` updated (workspace root context includes `imdbapi/` + `chain/`); compose updated                                                                               |
+| 8   | **CI**             | `Jenkinsfile` reviewed; LangSmith project name consistent with CI creds                                                                                                     |
+| 9   | **Diagrams**       | `04-langgraph-pipeline.puml`, `05-langgraph-statemachine.puml`, `09-seq-langgraph-execution.puml`; `workspace.dsl` if C4 changed; commit to `docs/` first; **never `.mdj`** |
+| 9a  | **Docs**           | `docs/` pages updated; SSE event shape change → verify `/docs` at `app/`; `README.md` + `CHANGELOG.md` updated                                                              |
 
 ### 10. Sibling submodules likely affected
-| Submodule | Why |
-|---|---|
-| `backend/app/` | SSE event fields and API response shape |
-| `backend/rag_ingestion/` | Embedding model must stay in sync with query-time embedding |
-| `backend/imdbapi/` | IMDb data shape changes break `enrich_imdb` node |
-| `frontend/` | SSE events consumed by `EventSource` — field renames are breaking |
-| `infrastructure/` | New LLM or embedding provider = new secret, possibly new Azure service |
-| `docs/` | Pipeline diagrams, architecture docs |
+
+| Submodule                | Why                                                                    |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `backend/app/`           | SSE event fields and API response shape                                |
+| `backend/rag_ingestion/` | Embedding model must stay in sync with query-time embedding            |
+| `backend/chain/imdbapi/` | IMDb data shape changes break `enrich_imdb` node                       |
+| `frontend/`              | SSE events consumed by `EventSource` — field renames are breaking      |
+| `infrastructure/`        | New LLM or embedding provider = new secret, possibly new Azure service |
+| `docs/`                  | Pipeline diagrams, architecture docs                                   |
 
 ### 11. Submodule pointer bump
+
 ```bash
 git add chain && git commit -m "chore(chain): bump to latest main"   # in backend/
 git add backend && git commit -m "chore(backend): bump to latest main"  # in root
 ```
 
 ### 12. Pull request
+
 - [ ] PR in `aharbii/movie-finder-chain` discloses the AI authoring tool + model
 - [ ] PR in `aharbii/movie-finder-backend` (pointer bump)
 - [ ] PR in `aharbii/movie-finder` (pointer bump)

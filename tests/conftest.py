@@ -6,7 +6,7 @@ External dependencies are fully mocked so tests run without:
 - Real Anthropic API credits
 - Real IMDb API access
 
-Pattern mirrors backend/imdbapi/tests/conftest.py.
+Pattern mirrors backend/chain/imdbapi/tests/conftest.py.
 """
 
 from __future__ import annotations
