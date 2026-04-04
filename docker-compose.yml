@@ -14,7 +14,7 @@ name: movie-finder-chain-local
 services:
   chain:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
       target: dev
     image: movie-finder-chain:dev
