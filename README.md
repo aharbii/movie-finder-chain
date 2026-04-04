@@ -44,8 +44,10 @@ User message
 ### Event-driven design
 
 Each user message triggers a new `graph.ainvoke()` call with the same
-`thread_id`. State is persisted by the checkpointer (in-memory `MemorySaver`
-by default, swappable for Redis/Postgres). No `interrupt()` / resume
+`thread_id`. State is persisted by the checkpointer. Use
+`checkpoint_lifespan()` with `DATABASE_URL` for a shared Postgres-backed
+checkpointer in production; local tests can still use the in-memory
+`MemorySaver`. No `interrupt()` / resume
 complexity — the graph reads `phase` from state to decide which branch runs.
 
 ---
@@ -141,6 +143,7 @@ cp .env.example .env
 | `QDRANT_COLLECTION_NAME` | optional  | Collection name (default: `movies`)                  |
 | `OPENAI_API_KEY`         | live runs | OpenAI embeddings for RAG queries                    |
 | `ANTHROPIC_API_KEY`      | live runs | Claude models for confirmation, refinement, and Q&A  |
+| `DATABASE_URL`           | optional  | Postgres URL for persistent LangGraph checkpoints    |
 | `CLASSIFIER_MODEL`       | optional  | Default: `claude-haiku-4-5-20251001`                 |
 | `REASONING_MODEL`        | optional  | Default: `claude-sonnet-4-6`                         |
 | `RAG_TOP_K`              | optional  | Qdrant result count (default: `8`)                   |
@@ -165,10 +168,11 @@ read-only Qdrant consumer and never writes to the collection.
 ```python
 import asyncio
 from langchain_core.messages import HumanMessage
-from chain import compile_graph
+from chain import checkpoint_lifespan, compile_graph
 
 async def main():
-    graph = compile_graph()
+    async with checkpoint_lifespan() as checkpointer:
+        graph = compile_graph(checkpointer=checkpointer)
     config = {"configurable": {"thread_id": "session-1"}}
 
     # Turn 1 — Discovery
@@ -214,10 +218,21 @@ async for event in graph.astream_events(
 ```python
 from fastapi import FastAPI
 from langchain_core.messages import AIMessage, HumanMessage
-from chain import compile_graph
+from chain import checkpoint_lifespan, compile_graph
 
 app = FastAPI()
-graph = compile_graph()  # singleton — shared across requests
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    app.state.checkpointer_cm = checkpoint_lifespan()
+    app.state.checkpointer = await app.state.checkpointer_cm.__aenter__()
+    app.state.graph = compile_graph(checkpointer=app.state.checkpointer)
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await app.state.checkpointer_cm.__aexit__(None, None, None)
 
 @app.post("/chat/{session_id}")
 async def chat(session_id: str, message: str):

@@ -42,6 +42,8 @@ LangChain/LangGraph tracing still activates automatically.
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Literal
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -146,6 +148,55 @@ def _apply_langsmith_env() -> None:
 # ---------------------------------------------------------------------------
 # Graph factory
 # ---------------------------------------------------------------------------
+
+
+def _load_async_postgres_saver() -> Any:
+    """Import AsyncPostgresSaver lazily.
+
+    Returns:
+        The AsyncPostgresSaver class.
+
+    Raises:
+        RuntimeError: If the optional dependency is not installed.
+    """
+    try:
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    except ImportError as exc:
+        raise RuntimeError(
+            "Persistent checkpointing requires `langgraph-checkpoint-postgres`."
+        ) from exc
+
+    return AsyncPostgresSaver
+
+
+@asynccontextmanager
+async def checkpoint_lifespan(
+    db_url: str | None = None,
+) -> AsyncIterator[BaseCheckpointSaver[Any]]:
+    """Yield a graph checkpointer for the current process lifespan.
+
+    If ``db_url`` is unset, this falls back to ``MemorySaver`` for local usage
+    and tests. When a database URL is present, the caller receives a shared
+    ``AsyncPostgresSaver`` with tables initialized via ``setup()``.
+
+    Args:
+        db_url: Optional override for the checkpoint database URL. Defaults to
+            ``DATABASE_URL`` from :func:`chain.config.get_config`.
+
+    Yields:
+        A ready-to-use LangGraph checkpointer.
+    """
+    from chain.config import get_config  # local import to avoid circular dependency
+
+    resolved_db_url = db_url or get_config().database_url
+    if not resolved_db_url:
+        yield MemorySaver()
+        return
+
+    async_postgres_saver = _load_async_postgres_saver()
+    async with async_postgres_saver.from_conn_string(resolved_db_url) as checkpointer:
+        await checkpointer.setup()
+        yield checkpointer
 
 
 def compile_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledGraph:

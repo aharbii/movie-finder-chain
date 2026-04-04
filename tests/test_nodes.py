@@ -26,7 +26,7 @@ from chain.nodes.dead_end import dead_end_node
 from chain.nodes.imdb_enrichment import _compute_confidence, imdb_enrichment_node
 from chain.nodes.presentation import presentation_node
 from chain.nodes.qa_agent import qa_agent_node
-from chain.nodes.rag_search import rag_search_node
+from chain.nodes.rag_search import _get_search_service, rag_search_node
 from chain.nodes.refinement import refinement_node
 from chain.nodes.validation import validation_node
 
@@ -36,6 +36,20 @@ from chain.nodes.validation import validation_node
 
 
 class TestRagSearchNode:
+    def test_search_service_is_cached_singleton(self, mock_config: Any) -> None:
+        _get_search_service.cache_clear()
+
+        with (
+            patch("chain.nodes.rag_search.get_config", return_value=mock_config),
+            patch("chain.nodes.rag_search.MovieSearchService") as mock_service_cls,
+        ):
+            first = _get_search_service()
+            second = _get_search_service()
+
+        assert first is second
+        mock_service_cls.assert_called_once_with(mock_config)
+        _get_search_service.cache_clear()
+
     @pytest.mark.asyncio
     async def test_extracts_query_from_last_human_message(self, mock_config: Any) -> None:
         """Uses last HumanMessage content when user_plot_query is not set."""
@@ -191,6 +205,28 @@ class TestImdbEnrichmentNode:
         enriched = result["enriched_movies"]
         assert len(enriched) == 1
         assert enriched[0]["imdb_id"] is None
+        assert enriched[0]["confidence"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_returns_degraded_rag_only_results_on_timeout(
+        self, mock_config: Any, sample_rag_candidates: list[dict[str, Any]]
+    ) -> None:
+        state = {"rag_candidates": sample_rag_candidates[:1]}
+
+        with (
+            patch("chain.nodes.imdb_enrichment.get_config", return_value=mock_config),
+            patch(
+                "chain.nodes.imdb_enrichment._run_imdb_enrichment",
+                new=AsyncMock(side_effect=TimeoutError),
+            ),
+        ):
+            result = await imdb_enrichment_node(state)  # type: ignore[arg-type]
+
+        enriched = result["enriched_movies"]
+        assert len(enriched) == 1
+        assert enriched[0]["rag_title"] == "Inception"
+        assert enriched[0]["imdb_id"] is None
+        assert enriched[0]["imdb_title"] is None
         assert enriched[0]["confidence"] == 0.0
 
 

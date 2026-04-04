@@ -10,8 +10,17 @@ the compiled object exposes the expected interface.
 from __future__ import annotations
 
 from typing import cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from chain.graph import _route_after_confirmation, _route_by_phase, compile_graph
+import pytest
+from langgraph.checkpoint.memory import MemorySaver
+
+from chain.graph import (
+    _route_after_confirmation,
+    _route_by_phase,
+    checkpoint_lifespan,
+    compile_graph,
+)
 from chain.state import MovieFinderState
 
 # ===========================================================================
@@ -99,8 +108,6 @@ class TestCompileGraph:
         assert hasattr(graph, "astream")
 
     def test_custom_checkpointer_accepted(self) -> None:
-        from langgraph.checkpoint.memory import MemorySaver
-
         graph = compile_graph(checkpointer=MemorySaver())
         assert callable(getattr(graph, "ainvoke", None))
 
@@ -121,3 +128,30 @@ class TestCompileGraph:
             "__end__",
         }
         assert expected.issubset(node_names)
+
+
+class TestCheckpointLifespan:
+    @pytest.mark.asyncio
+    async def test_defaults_to_memory_saver_without_database_url(self) -> None:
+        async with checkpoint_lifespan() as checkpointer:
+            assert isinstance(checkpointer, MemorySaver)
+
+    @pytest.mark.asyncio
+    async def test_uses_async_postgres_saver_when_database_url_is_configured(self) -> None:
+        mock_checkpointer = AsyncMock()
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__.return_value = mock_checkpointer
+        mock_context_manager.__aexit__.return_value = False
+
+        mock_async_postgres_saver = MagicMock()
+        mock_async_postgres_saver.from_conn_string.return_value = mock_context_manager
+
+        with (
+            patch("chain.graph._load_async_postgres_saver", return_value=mock_async_postgres_saver),
+            patch("chain.config.get_config", return_value=MagicMock(database_url="postgres://db")),
+        ):
+            async with checkpoint_lifespan() as checkpointer:
+                assert checkpointer is mock_checkpointer
+
+        mock_async_postgres_saver.from_conn_string.assert_called_once_with("postgres://db")
+        mock_checkpointer.setup.assert_awaited_once()

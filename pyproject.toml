@@ -15,6 +15,7 @@ classifiers = [
 ]
 dependencies = [
     "langgraph>=0.2.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
     "langchain-anthropic>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-core>=0.3.0",
@@ -90,7 +91,7 @@ module = ["chain.nodes.confirmation", "chain.nodes.refinement"]
 disable_error_code = ["call-arg"]
 
 [[tool.mypy.overrides]]
-# create_agent (langchain.agents) returns a Pregel whose ainvoke stubs don't
+# create_agent (via imdbapi's public agent factory) returns a Pregel whose ainvoke stubs don't
 # match dict[str, list[BaseMessage]] input — suppress at the module level so
 # repo-local strict typechecking stays aligned with the backend workspace.
 module = "chain.nodes.qa_agent"

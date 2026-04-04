@@ -15,6 +15,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added `checkpoint_lifespan()` and `DATABASE_URL` support so LangGraph can use
+  `AsyncPostgresSaver` instead of process-local memory in production
+- Locked the RAG search service's lazy singleton behavior in tests so OpenAI
+  and Qdrant clients remain process-scoped
+- IMDb enrichment now uses a 10-second node timeout, shorter retry backoff,
+  degraded RAG-only fallback on timeout, and semaphore-limited concurrent IMDb requests
+- `MovieFinderState` now marks optional fields with `NotRequired[...]` instead
+  of making the entire state schema optional
+- The bundled `imdbapi` agent now uses the supported public
+  `langchain.agents.create_agent` API
 - `docker-compose.yml` now runs a single persistent `chain` dev container and
   no longer ships a local Qdrant service
 - `Dockerfile`, `.vscode/*`, `README.md`, and `CONTRIBUTING.md` now follow the

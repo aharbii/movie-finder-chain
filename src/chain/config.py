@@ -51,6 +51,7 @@ class ChainConfig(BaseSettings):
     # --- LLM Providers ---
     openai_api_key: str = Field(..., alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(..., alias="ANTHROPIC_API_KEY")
+    database_url: str | None = Field(None, alias="DATABASE_URL")
 
     # --- Models ---
     embedding_model: str = Field("text-embedding-3-large", alias="EMBEDDING_MODEL")
