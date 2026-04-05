@@ -12,6 +12,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - `Makefile` with Docker-backed repo-local targets for `dev`, `lint`, `format`,
   `typecheck`, `test`, `test-coverage`, `pre-commit`, and the example scripts
+- `LOG_FORMAT` env var documented in `.env.example` — `text` (default) or `json`
+  for Azure Monitor / structured log pipelines
+- GitHub Actions CI workflow (`.github/workflows/ci.yml`) mirroring Jenkins 1:1:
+  Lint · Typecheck · Test
 
 ### Changed
 
@@ -19,8 +23,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `AsyncPostgresSaver` instead of process-local memory in production
 - Locked the RAG search service's lazy singleton behavior in tests so OpenAI
   and Qdrant clients remain process-scoped
-- IMDb enrichment now uses a 10-second node timeout, shorter retry backoff,
-  degraded RAG-only fallback on timeout, and semaphore-limited concurrent IMDb requests
+- IMDb enrichment is now fully sequential (no concurrent semaphore) to avoid
+  Cloudflare rate-limit bursts; pipeline respects `retry_after` from HTTP 429
+  response body; no per-node timeout — enrichment always completes
+- Candidate list trimmed to `_MAX_ENRICH_CANDIDATES = 5` before enrichment;
+  RAG_TOP_K remains at 8 to keep the semantic net wide
+- `validation` node no longer requires `imdb_id` — degraded candidates with
+  `rag_score`-derived confidence pass through the pipeline
+- `presentation` node restores rich format with emoji labels, full metadata,
+  and proper Markdown hard line breaks
+- `confirmation` node generates a warm AI-written confirmation using Claude Haiku
+- `utils/logger.py` rewritten as a thin library shim — `get_logger` returns
+  `logging.getLogger(name)` with no side effects; `configure_logging()` added
+  for standalone chain scripts and examples
 - `MovieFinderState` now marks optional fields with `NotRequired[...]` instead
   of making the entire state schema optional
 - The bundled `imdbapi` agent now uses the supported public
@@ -31,6 +46,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   Docker-only local development contract
 - Chain configuration now consumes the canonical read-only Qdrant env vars:
   `QDRANT_URL`, `QDRANT_API_KEY_RO`, and `QDRANT_COLLECTION_NAME`
+- `Jenkinsfile` — added `sourceDirectories` to `recordCoverage`; coverage.xml
+  now emits workspace-relative paths via `relative_files = true` in pyproject.toml
 
 ---
 
