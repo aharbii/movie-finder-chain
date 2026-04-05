@@ -64,9 +64,21 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
     # Qdrant returns candidates sorted by score — take the top N.
     candidates = candidates[:_MAX_ENRICH_CANDIDATES]
 
-    enriched_movies = await _run_imdb_enrichment(
-        candidates, cfg.imdb_search_limit, cfg.confidence_threshold
-    )
+    try:
+        enriched_movies = await _run_imdb_enrichment(
+            candidates, cfg.imdb_search_limit, cfg.confidence_threshold
+        )
+    except Exception as exc:
+        # Defensive last-resort: any unhandled exception from the enrichment
+        # workflow (e.g. connectivity failure, unexpected library error) falls
+        # back to RAG-only degraded records so the pipeline can still present
+        # results.  Per-candidate failures inside _search_best_match are already
+        # caught there; this guard handles the rare case where the client
+        # context manager or batch step itself fails.
+        logger.warning(
+            "IMDb enrichment failed unexpectedly — using degraded RAG-only results: %s", exc
+        )
+        enriched_movies = _build_degraded_movies(candidates)
 
     logger.info(
         "Enriched %s/%s candidates with IMDb data",
