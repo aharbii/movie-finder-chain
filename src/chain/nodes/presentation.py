@@ -58,24 +58,53 @@ async def presentation_node(state: MovieFinderState) -> dict[str, Any]:
 
 
 def _format_list(movies: list[dict[str, Any]]) -> str:
-    """Format multiple movies into a numbered list.
+    """Format multiple movies into a numbered list with full metadata.
+
+    Each movie block uses markdown hard line breaks (two trailing spaces) so
+    that individual fields render on separate lines inside a markdown renderer.
+    Movie blocks are separated by blank lines.
 
     Args:
         movies: The list of movie records.
 
     Returns:
-        A formatted string list.
+        A formatted string.
     """
-    lines = ["I found a few possibilities. Is it one of these?\n"]
+    blocks: list[str] = [
+        "Based on your description, here are the movies that best match your plot:"
+    ]
     for i, m in enumerate(movies, start=1):
-        t = m.get("imdb_title") or m.get("rag_title", "?")
-        y = m.get("imdb_year") or m.get("rag_year") or "?"
-        conf = m.get("confidence", 0.0)
-        imdb_id = m.get("imdb_id", "—")
-        lines.append(f"{i}. **{t}** ({y}) — *confidence: {conf:.0%}* [IMDb: {imdb_id}]")
+        title = m.get("imdb_title") or m.get("rag_title", "?")
+        year = m.get("imdb_year") or m.get("rag_year") or "?"
+        rating = m.get("imdb_rating")
+        directors = m.get("imdb_directors") or (
+            [m["rag_director"]] if m.get("rag_director") else []
+        )
+        stars = m.get("imdb_stars") or []
+        genres = m.get("imdb_genres") or m.get("rag_genre") or []
+        plot = m.get("imdb_plot") or m.get("rag_plot") or ""
 
-    lines.append('\nReply with the number, or say "none of these" to refine the search.')
-    return "\n".join(lines)
+        movie_lines = [f"{i}. {title} ({year})"]
+        if rating:
+            movie_lines.append(f"⭐ IMDb Rating: {rating}/10")
+        if directors:
+            movie_lines.append(f"🎬 Director(s): {', '.join(directors)}")
+        if stars:
+            movie_lines.append(f"🎭 Stars: {', '.join(stars)}")
+        if genres:
+            movie_lines.append(f"🎞️  Genre: {', '.join(genres)}")
+        if plot:
+            movie_lines.append(f"📖 {plot}")
+
+        # Hard line breaks keep fields together visually in a markdown renderer.
+        blocks.append("  \n".join(movie_lines))
+
+    blocks.append(
+        "Is your movie one of these? You can reply with anything — "
+        "the title, a number, or a description — and I'll figure it out. "
+        "If none of them match, just let me know and I'll search again."
+    )
+    return "\n\n".join(blocks)
 
 
 def _format_single(movie: dict[str, Any]) -> str:
