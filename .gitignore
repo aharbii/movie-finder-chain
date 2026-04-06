@@ -13,10 +13,7 @@ build/
 # Test & coverage
 .pytest_cache/
 .coverage
-coverage.xml
-test-results.xml
-junit.xml
-htmlcov/
+reports/
 
 # IDEs
 .vscode/*

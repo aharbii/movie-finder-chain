@@ -6,11 +6,13 @@ fetches full metadata for the high-confidence matches.
 
 Design choices
 --------------
-* Search calls are parallelised with ``asyncio.gather``, but capped at
-  ``_SEARCH_CONCURRENCY`` concurrent requests via a semaphore to avoid
-  triggering Cloudflare rate limits on the API.
+* Search calls are serialised (concurrency = 1) to avoid triggering the
+  Cloudflare rate limiter.  Firing multiple requests concurrently causes all
+  of them to hit 429 simultaneously and exhausts the retry budget quickly.
 * Full ``titles.get()`` calls are batched in groups of 5 using ``batch_get``
   with exponential-backoff retry on HTTP 429.
+* The node has no timeout — it waits as long as the API needs, honouring the
+  ``retry_after`` value from each 429 response.
 * Failures on individual candidates are caught and logged — the node never
   raises so a partial result is still useful.
 """
@@ -18,6 +20,7 @@ Design choices
 from __future__ import annotations
 
 import asyncio
+import json
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -33,13 +36,13 @@ logger = get_logger(__name__)
 
 # IMDb search returns TitleRef-like summaries; batch_get accepts up to 5 IDs.
 _BATCH_SIZE = 5
-# Max concurrent search requests — keeps us under the API rate limit.
-_SEARCH_CONCURRENCY = 3
-# Seconds to stagger the start of each search task to avoid burst rate-limiting.
-_SEARCH_STAGGER_DELAY = 0.5
-# Retry config for 429 responses (seconds).
-_RETRY_BASE_DELAY = 30.0
-_RETRY_MAX_ATTEMPTS = 4
+# Maximum number of RAG candidates to enrich and present.
+# RAG_TOP_K intentionally fetches more for a wider semantic net; we cap here.
+_MAX_ENRICH_CANDIDATES = 5
+# Retry config for 429 responses.
+# Delay is read from the API's retry_after field; this is the fallback.
+_DEFAULT_RETRY_AFTER = 30.0
+_RETRY_MAX_RETRIES = 3
 
 
 async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
@@ -58,41 +61,115 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
         logger.warning("imdb_enrichment_node: no RAG candidates to enrich")
         return {"enriched_movies": []}
 
-    semaphore = asyncio.Semaphore(_SEARCH_CONCURRENCY)
+    # Qdrant returns candidates sorted by score — take the top N.
+    candidates = candidates[:_MAX_ENRICH_CANDIDATES]
 
-    async with IMDBAPIClient() as client:
-        # Step 1: staggered + rate-limited parallel IMDB search.
-        # Each task sleeps i * _SEARCH_STAGGER_DELAY before its first request
-        # so we never fire all queries simultaneously.
-        search_tasks = [
-            _search_best_match(
-                client, c, cfg.imdb_search_limit, semaphore, i * _SEARCH_STAGGER_DELAY
-            )
-            for i, c in enumerate(candidates)
-        ]
-        best_matches: list[tuple[dict[str, Any], str | None, float]] = await asyncio.gather(
-            *search_tasks
+    try:
+        enriched_movies = await _run_imdb_enrichment(
+            candidates, cfg.imdb_search_limit, cfg.confidence_threshold
         )
+    except Exception as exc:
+        # Defensive last-resort: any unhandled exception from the enrichment
+        # workflow (e.g. connectivity failure, unexpected library error) falls
+        # back to RAG-only degraded records so the pipeline can still present
+        # results.  Per-candidate failures inside _search_best_match are already
+        # caught there; this guard handles the rare case where the client
+        # context manager or batch step itself fails.
+        logger.warning(
+            "IMDb enrichment failed unexpectedly — using degraded RAG-only results: %s", exc
+        )
+        enriched_movies = _build_degraded_movies(candidates)
+
+    logger.info(
+        "Enriched %s/%s candidates with IMDb data",
+        sum(1 for movie in enriched_movies if movie.get("imdb_id")),
+        len(enriched_movies),
+    )
+    return {"enriched_movies": enriched_movies}
+
+
+async def _run_imdb_enrichment(
+    candidates: list[dict[str, Any]],
+    search_limit: int,
+    confidence_threshold: float,
+) -> list[dict[str, Any]]:
+    """Execute the full IMDb enrichment workflow, honouring API retry_after delays."""
+    async with IMDBAPIClient() as client:
+        # Step 1: sequential IMDb search — one candidate at a time.
+        # asyncio.gather fires all coroutines simultaneously; with a semaphore
+        # they each acquire and release within milliseconds of each other,
+        # overwhelming the rate limiter.  A plain loop ensures each candidate's
+        # full retry cycle (including any 30s back-off) completes before the
+        # next search starts.
+        best_matches: list[tuple[dict[str, Any], str | None, float]] = []
+        for candidate in candidates:
+            match = await _search_best_match(client, candidate, search_limit)
+            best_matches.append(match)
         # best_matches[i] = (candidate, imdb_id | None, confidence)
 
         # Step 2: batch-fetch full title details for confident matches
         id_to_full: dict[str, dict[str, Any]] = {}
         confident_ids = [
-            imdb_id
-            for _, imdb_id, conf in best_matches
-            if imdb_id and conf >= cfg.confidence_threshold
+            imdb_id for _, imdb_id, conf in best_matches if imdb_id and conf >= confidence_threshold
         ]
 
-        for batch_start in range(0, len(confident_ids), _BATCH_SIZE):
-            batch = confident_ids[batch_start : batch_start + _BATCH_SIZE]
-            try:
-                resp = await _batch_get_with_retry(client, batch)
-                for title in resp.titles:
-                    id_to_full[title.id] = _title_to_dict(title)
-            except Exception as exc:
-                logger.warning(f"batch_get failed for {batch}: {exc}")
+        batch_tasks = [
+            _batch_get_with_retry(client, confident_ids[index : index + _BATCH_SIZE])
+            for index in range(0, len(confident_ids), _BATCH_SIZE)
+        ]
+        batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        for batch, result in zip(
+            [
+                confident_ids[index : index + _BATCH_SIZE]
+                for index in range(0, len(confident_ids), _BATCH_SIZE)
+            ],
+            batch_results,
+            strict=False,
+        ):
+            if isinstance(result, BaseException):
+                logger.warning(f"batch_get failed for {batch}: {result}")
+                continue
+            for title in result.titles:
+                id_to_full[title.id] = _title_to_dict(title)
 
     # Step 3: merge RAG + IMDb data into enriched records
+    return _merge_enriched_movies(best_matches, id_to_full)
+
+
+def _build_degraded_movies(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return RAG-only records when IMDb enrichment times out.
+
+    Confidence is set to the Qdrant cosine similarity score so that
+    high-quality RAG matches are not discarded by the validation node.
+    """
+    return [
+        {
+            "rag_title": candidate.get("title", ""),
+            "rag_year": candidate.get("release_year", 0),
+            "rag_director": candidate.get("director", ""),
+            "rag_genre": candidate.get("genre", []),
+            "rag_cast": candidate.get("cast", []),
+            "rag_plot": candidate.get("plot", ""),
+            "imdb_id": None,
+            "imdb_title": None,
+            "imdb_year": None,
+            "imdb_rating": None,
+            "imdb_plot": None,
+            "imdb_genres": [],
+            "imdb_directors": [],
+            "imdb_stars": [],
+            "imdb_poster_url": None,
+            "confidence": float(candidate.get("rag_score", 0.0)),
+        }
+        for candidate in candidates
+    ]
+
+
+def _merge_enriched_movies(
+    best_matches: list[tuple[dict[str, Any], str | None, float]],
+    id_to_full: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge RAG candidates with any fetched IMDb metadata."""
     enriched: list[dict[str, Any]] = []
     for candidate, imdb_id, confidence in best_matches:
         imdb_data = id_to_full.get(imdb_id, {}) if imdb_id else {}
@@ -119,16 +196,32 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
                 "confidence": confidence,
             }
         )
-
-    logger.info(
-        f"Enriched {sum(1 for e in enriched if e.get('imdb_id'))}/{len(enriched)} candidates with IMDb data"
-    )
-    return {"enriched_movies": enriched}
+    return enriched
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _extract_retry_after(exc: IMDBAPIRateLimitError) -> float:
+    """Read the ``retry_after`` value (seconds) from a 429 response body.
+
+    The imdbapi.dev Cloudflare 429 payload is a JSON object with a top-level
+    ``retry_after`` integer field.  Falls back to ``_DEFAULT_RETRY_AFTER`` if
+    the field is absent or the body cannot be parsed.
+
+    Args:
+        exc: The rate-limit exception raised by the IMDb client.
+
+    Returns:
+        How long to wait before the next retry, in seconds.
+    """
+    try:
+        data = json.loads(exc.message)
+        return float(data.get("retry_after", _DEFAULT_RETRY_AFTER))
+    except Exception:
+        return _DEFAULT_RETRY_AFTER
 
 
 async def _batch_get_with_retry(client: IMDBAPIClient, ids: list[str]) -> BatchGetTitlesResponse:
@@ -144,20 +237,22 @@ async def _batch_get_with_retry(client: IMDBAPIClient, ids: list[str]) -> BatchG
     Raises:
         IMDBAPIRateLimitError: If max retry attempts reached.
     """
-    delay = _RETRY_BASE_DELAY
     last_exc: Exception | None = None
-    for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+    total_attempts = _RETRY_MAX_RETRIES + 1
+    delay = _DEFAULT_RETRY_AFTER
+    for attempt in range(1, total_attempts + 1):
         try:
             return await client.titles.batch_get(ids)
         except IMDBAPIRateLimitError as exc:
             last_exc = exc
-            if attempt == _RETRY_MAX_ATTEMPTS:
+            if attempt == total_attempts:
                 break
+            delay = _extract_retry_after(exc)
             logger.warning(
-                f"batch_get rate-limited (attempt {attempt}/{_RETRY_MAX_ATTEMPTS}) — retrying in {delay:.0f}s: {exc}"
+                f"batch_get rate-limited (attempt {attempt}/{total_attempts}) — retrying in {delay:.0f}s: {exc}"
             )
             await asyncio.sleep(delay)
-            delay *= 2  # exponential backoff
+            delay *= 2  # exponential backoff for subsequent retries
     raise last_exc or IMDBAPIRateLimitError(429, "rate limited")
 
 
@@ -165,8 +260,6 @@ async def _search_best_match(
     client: IMDBAPIClient,
     candidate: dict[str, Any],
     search_limit: int,
-    semaphore: asyncio.Semaphore,
-    initial_delay: float = 0.0,
 ) -> tuple[dict[str, Any], str | None, float]:
     """Search IMDb for a title matching *candidate* and return the best hit.
 
@@ -174,9 +267,6 @@ async def _search_best_match(
         client: The IMDb API client.
         candidate: The RAG candidate dict.
         search_limit: Max number of hits to fetch from search.
-        semaphore: The concurrency semaphore.
-        initial_delay: Time to sleep before firing the request.
-
     Returns:
         A tuple of (candidate, best_imdb_id, confidence_score).
     """
@@ -184,24 +274,22 @@ async def _search_best_match(
     year = candidate.get("release_year", 0)
     query = f"{title} {year}" if year else title
 
-    if initial_delay:
-        await asyncio.sleep(initial_delay)
-
-    delay = _RETRY_BASE_DELAY
-    for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+    total_attempts = _RETRY_MAX_RETRIES + 1
+    delay = _DEFAULT_RETRY_AFTER
+    for attempt in range(1, total_attempts + 1):
         try:
-            async with semaphore:
-                result = await client.search.titles(query, limit=search_limit)
+            result = await client.search.titles(query, limit=search_limit)
             break  # success
         except IMDBAPIRateLimitError as exc:
-            if attempt == _RETRY_MAX_ATTEMPTS:
+            if attempt == total_attempts:
                 logger.warning(f"IMDB search failed for '{title}': {exc}")
                 return candidate, None, 0.0
+            delay = _extract_retry_after(exc)
             logger.warning(
-                f"Search rate-limited for '{title}' (attempt {attempt}/{_RETRY_MAX_ATTEMPTS}) — retrying in {delay:.0f}s"
+                f"Search rate-limited for '{title}' (attempt {attempt}/{total_attempts}) — retrying in {delay:.0f}s"
             )
             await asyncio.sleep(delay)
-            delay *= 2
+            delay *= 2  # exponential backoff for subsequent retries
         except Exception as exc:
             logger.warning(f"IMDB search failed for '{title}': {exc}")
             return candidate, None, 0.0

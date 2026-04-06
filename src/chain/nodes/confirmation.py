@@ -21,7 +21,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import SecretStr
 
-from chain.config import get_config
+from chain.config import ChainConfig, get_config
 from chain.models.output import ConfirmationClassification
 from chain.state import MovieFinderState
 from chain.utils.logger import get_logger
@@ -90,20 +90,13 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
             logger.info(
                 f"Movie confirmed: {confirmed_title} ({confirmed_year}) | imdb_id={confirmed_id}"
             )
+            confirmation_message = await _generate_confirmation_message(confirmed, cfg)
             return {
                 "confirmed_movie_id": confirmed.get("imdb_id"),
                 "confirmed_movie_title": confirmed_title,
                 "confirmed_movie_data": confirmed,
                 "next_action": "confirmed",
-                "messages": [
-                    AIMessage(
-                        content=(
-                            f"Great! I've confirmed **{confirmed_title}**"
-                            f" ({confirmed_year}) as your movie. "
-                            "You can now ask me anything about it!"
-                        )
-                    )
-                ],
+                "messages": [AIMessage(content=confirmation_message)],
             }
 
     if result.decision == "not_found":
@@ -123,8 +116,9 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
         "messages": [
             AIMessage(
                 content=(
-                    "I'm not sure which movie you meant. Could you reply with its number "
-                    '(e.g. *"It\'s #2"*), or let me know if none of the options match?'
+                    "I'm not sure which movie you meant. "
+                    'You can tell me the title, say something like "the second one", '
+                    "or let me know if none of them match."
                 )
             )
         ],
@@ -169,6 +163,61 @@ def _format_candidates(movies: list[dict[str, Any]]) -> str:
         year = m.get("imdb_year") or m.get("rag_year", "?")
         lines.append(f"{i}. {title} ({year})")
     return "\n".join(lines)
+
+
+async def _generate_confirmation_message(movie: dict[str, Any], cfg: ChainConfig) -> str:
+    """Generate a warm, personalised confirmation message using the LLM.
+
+    Args:
+        movie: The confirmed enriched movie record.
+        cfg: Chain configuration (model names, API key).
+
+    Returns:
+        AI-generated confirmation message as a string.
+    """
+    title = movie.get("imdb_title") or movie.get("rag_title", "this movie")
+    year = movie.get("imdb_year") or movie.get("rag_year", "")
+    rating = movie.get("imdb_rating")
+    directors = movie.get("imdb_directors") or (
+        [movie["rag_director"]] if movie.get("rag_director") else []
+    )
+    stars = movie.get("imdb_stars") or []
+    genres = movie.get("imdb_genres") or movie.get("rag_genre") or []
+    plot = movie.get("imdb_plot") or movie.get("rag_plot") or ""
+
+    movie_facts: list[str] = [f"Title: {title} ({year})"]
+    if rating:
+        movie_facts.append(f"IMDb Rating: {rating}/10")
+    if directors:
+        movie_facts.append(f"Director(s): {', '.join(directors)}")
+    if stars:
+        movie_facts.append(f"Stars: {', '.join(stars)}")
+    if genres:
+        movie_facts.append(f"Genres: {', '.join(genres)}")
+    if plot:
+        movie_facts.append(f"Plot: {plot}")
+
+    prompt = (
+        "You are a friendly, enthusiastic movie assistant. The user has just identified their movie.\n\n"
+        "Movie details:\n" + "\n".join(f"- {fact}" for fact in movie_facts) + "\n\n"
+        "Write a warm, celebratory confirmation message that:\n"
+        "1. Celebrates that the user found their movie (use an appropriate emoji or two)\n"
+        "2. Shows a quick summary of the movie using the details above with emoji labels\n"
+        "3. Invites them to ask follow-up questions with 4-5 personalised example questions "
+        "   drawn from the actual cast, director, and genres above\n\n"
+        "Use markdown for formatting. Keep it concise and upbeat. Do not invent facts not listed above."
+    )
+
+    llm = ChatAnthropic(
+        model_name=cfg.classifier_model,
+        api_key=SecretStr(cfg.anthropic_api_key),
+    )
+    try:
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        return str(response.content)
+    except Exception as exc:
+        logger.error(f"Failed to generate confirmation message: {exc}")
+        return f"Great! I've confirmed **{title} ({year})** as your movie. What would you like to know about it?"
 
 
 def _load_prompt() -> str:

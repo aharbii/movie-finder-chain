@@ -31,20 +31,20 @@ async def validation_node(state: MovieFinderState) -> dict[str, Any]:
     if not enriched:
         return {"enriched_movies": []}
 
-    # Keep only those with an IMDb ID and confidence >= threshold
-    valid_movies = [
-        m for m in enriched if m.get("imdb_id") and m["confidence"] >= cfg.confidence_threshold
-    ]
+    # Keep candidates whose confidence meets the threshold.
+    # IMDb ID is not required — degraded (RAG-only) candidates carry their
+    # Qdrant cosine similarity as confidence and are presented without IMDb data.
+    valid_movies = [m for m in enriched if m["confidence"] >= cfg.confidence_threshold]
 
     # Log what was filtered out
     filtered_count = len(enriched) - len(valid_movies)
     if filtered_count > 0:
         logger.info(f"Validation node: filtered out {filtered_count} low-confidence candidate(s)")
         for movie in enriched:
-            imdb_id = movie.get("imdb_id")
             conf = movie.get("confidence", 0.0)
-            if not imdb_id or conf < cfg.confidence_threshold:
+            if conf < cfg.confidence_threshold:
                 title = movie.get("imdb_title") or movie.get("rag_title", "?")
+                imdb_id = movie.get("imdb_id", "—")
                 logger.debug(f"  [Filtered] {title} (conf={conf:.2f}, id={imdb_id})")
 
     # If everything was filtered out, we still return an empty list so the

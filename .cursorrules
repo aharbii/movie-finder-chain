@@ -1,0 +1,41 @@
+# Movie Finder Chain — Cursor Rules
+
+You are working in the movie-finder-chain workspace.
+Primary reference: CLAUDE.md (loaded automatically; also valid for Cursor).
+
+## What this workspace does
+
+LangGraph 8-node AI pipeline.
+classify → search_rag → enrich_imdb → reason → route → refine / confirm / answer
+
+## All quality commands run inside Docker
+
+```bash
+make lint            # ruff check
+make typecheck       # mypy --strict
+make test            # pytest tests/
+make test-coverage   # pytest + reports/
+make pre-commit      # full hook suite
+```
+
+## Critical rules
+
+- State machine: new behaviour = new node or edge, NEVER branching inside existing nodes
+- Nodes are pure functions: take MovieFinderState, return partial state update
+- Access MovieFinderState fields with .get() and safe defaults (issue #15 — total=False)
+- Never re-create OpenAI/Qdrant clients inside nodes (issue #7)
+- Node construction is centralised in graph.py — no wiring elsewhere
+- Configuration: Pydantic BaseSettings in config.py — never os.getenv() in nodes
+- Models: Claude Haiku for classify nodes, Claude Sonnet for reason/Q&A nodes
+
+## Python rules
+
+- mypy --strict on all node functions
+- No print() — LangSmith handles observability
+- Line length: 100
+
+## IMDb enrichment rules
+
+- Sequential (no concurrent semaphore) — Cloudflare rate-limits concurrent requests
+- Respect retry_after from HTTP 429 response body
+- Max candidates before enrichment: _MAX_ENRICH_CANDIDATES = 5

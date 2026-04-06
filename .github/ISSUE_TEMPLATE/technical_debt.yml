@@ -1,0 +1,74 @@
+name: "Technical Debt / Design Flaw (local)"
+description: "Architectural, design, or implementation quality issues found directly in this repo."
+title: "[TECH-DEBT] <short description>"
+labels: ["technical-debt"]
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Local Technical Debt
+        If this finding is part of a broader concern already tracked in the
+        [main movie-finder repo](https://github.com/aharbii/movie-finder/issues),
+        use the **Linked Task** template instead.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      options:
+        - "critical – production blocker, must fix before next release"
+        - "high     – significant risk or performance impact"
+        - "medium   – moderate risk, should fix in near term"
+        - "low      – minor quality issue, fix when convenient"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: "Category"
+      options:
+        - "architecture   – structural / design decision"
+        - "database        – schema, indexes, migrations"
+        - "security        – auth, tokens, input validation"
+        - "performance     – latency, concurrency, connection pooling"
+        - "reliability     – error handling, retries, fallbacks"
+        - "observability   – logging, metrics, tracing"
+        - "testing         – coverage gaps, test quality"
+        - "devops          – CI/CD, Docker, deployment"
+        - "api-design      – REST contract, OpenAPI spec"
+        - "agentic-ai      – LLM pipeline, RAG, embeddings"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: "What is the problem and why does it matter?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: "File / line reference"
+      placeholder: |
+        src/chain/graph.py:192
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Impact if not fixed"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_fix
+    attributes:
+      label: "Proposed fix / approach"
+    validations:
+      required: false

@@ -10,7 +10,7 @@ Phase lifecycle:
 from __future__ import annotations
 
 from operator import add
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, NotRequired, TypedDict
 
 from langchain_core.messages import BaseMessage
 
@@ -37,16 +37,16 @@ class MovieFinderState(TypedDict):
     messages: Annotated[list[BaseMessage], add]
 
     # --- State machine control ---
-    phase: Literal["discovery", "confirmation", "qa"]
-    next_action: Literal["confirmed", "refine", "exhausted", "wait"] | None
+    phase: NotRequired[Literal["discovery", "confirmation", "qa"]]
+    next_action: NotRequired[Literal["confirmed", "refine", "exhausted", "wait"] | None]
 
     # --- Discovery pipeline data ---
-    user_plot_query: str | None
-    refinement_count: int
-    rag_candidates: list[dict[str, Any]]
-    enriched_movies: list[dict[str, Any]]
+    user_plot_query: NotRequired[str | None]
+    refinement_count: NotRequired[int]
+    rag_candidates: NotRequired[list[dict[str, Any]]]
+    enriched_movies: NotRequired[list[dict[str, Any]]]
 
     # --- Confirmation / Q&A data ---
-    confirmed_movie_id: str | None  # IMDb title ID, e.g. "tt1375666"
-    confirmed_movie_title: str | None  # Human-readable title
-    confirmed_movie_data: dict[str, Any] | None  # Full enriched record for Q&A context
+    confirmed_movie_id: NotRequired[str | None]  # IMDb title ID, e.g. "tt1375666"
+    confirmed_movie_title: NotRequired[str | None]  # Human-readable title
+    confirmed_movie_data: NotRequired[dict[str, Any] | None]  # Full enriched record for Q&A context

@@ -1,0 +1,54 @@
+{
+  "customizations": {
+    "jetbrains": {
+      "backend": "PyCharm",
+      "projectType": "python"
+    },
+    "vscode": {
+      "extensions": [
+        "ms-vscode-remote.remote-containers",
+        "ms-python.python",
+        "ms-python.pylance",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "ryanluker.vscode-coverage-gutters",
+        "ms-vscode.makefile-tools"
+      ],
+      "settings": {
+        "[python]": {
+          "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+          },
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        "editor.rulers": [
+          100
+        ],
+        "python.analysis.extraPaths": [
+          "/workspace/src",
+          "/workspace/imdbapi/src"
+        ],
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.testing.pytestArgs": [
+          "tests",
+          "--asyncio-mode=auto"
+        ],
+        "python.testing.pytestEnabled": true
+      }
+    }
+  },
+  "dockerComposeFile": "../docker-compose.yml",
+  "forwardPorts": [],
+  "name": "movie-finder-chain",
+  "overrideCommand": false,
+  "postCreateCommand": "git config --global --add safe.directory /workspace && git config --global --add safe.directory '*' && echo 'Chain devcontainer ready. Run: make up'",
+  "remoteEnv": {
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1"
+  },
+  "remoteUser": "root",
+  "service": "chain",
+  "shutdownAction": "stopCompose",
+  "workspaceFolder": "/workspace"
+}
