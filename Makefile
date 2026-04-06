@@ -1,5 +1,5 @@
 # =============================================================================
-# movie-finder-chain — Docker-only developer contract
+# Movie Finder Chain — Docker-only developer contract
 #
 # Usage:
 #   make help

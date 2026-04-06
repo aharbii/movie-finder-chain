@@ -1,4 +1,4 @@
-# movie-finder-chain
+# Movie Finder Chain
 
 LangGraph pipeline that powers the Movie Finder conversational AI. The chain
 takes a natural-language plot description, searches a Qdrant vector store of
