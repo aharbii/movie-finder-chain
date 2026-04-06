@@ -1,15 +1,12 @@
 """Logging utilities for the chain package.
 
-Library code calls ``logging.getLogger(__name__)`` directly — it never
-configures the logging system.  Configuration is the responsibility of the
-entry point (FastAPI app via ``app.logging_config.configure_logging``,
-standalone examples, or test suites).
+Library code never configures the logging system — configuration is the
+responsibility of the entry point (FastAPI app via
+``app.logging_config.configure_logging``, standalone examples, or tests).
 
-``get_logger`` is a thin backward-compatible shim.  New code should call
-``logging.getLogger(__name__)`` directly.
-
-``configure_logging`` is provided for standalone chain usage (examples,
-one-off scripts) where the FastAPI app bootstrap is not present.
+``get_logger(name)`` is the standard way to obtain a logger in this package.
+``configure_logging()`` is for standalone chain scripts and examples where
+the FastAPI bootstrap is not present.
 """
 
 from __future__ import annotations
@@ -23,11 +20,8 @@ from datetime import UTC, datetime
 def get_logger(name: str) -> logging.Logger:
     """Return a stdlib logger for the given name.
 
-    Thin wrapper around ``logging.getLogger`` kept for backward compatibility.
-    New callers may use ``logging.getLogger(__name__)`` directly.
-
     Args:
-        name: Logger name, typically ``__name__``.
+        name: Logger name, typically ``__name__`` or ``self.__class__.__name__``.
 
     Returns:
         A ``logging.Logger`` instance.
