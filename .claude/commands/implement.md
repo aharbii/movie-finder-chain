@@ -2,7 +2,7 @@
 
 **Repo:** `aharbii/movie-finder-chain`
 **Parent tracker:** `aharbii/movie-finder`
-**Pre-commit:** `uv run pre-commit run --all-files`
+**Pre-commit:** `make pre-commit` (runs inside Docker — no host Python required)
 
 Implement GitHub issue #$ARGUMENTS from `aharbii/movie-finder-chain`.
 
@@ -63,8 +63,10 @@ General backend standards:
 ## Step 6 — Run quality checks
 
 ```bash
-uv run pre-commit run --all-files
+make pre-commit
 ```
+
+Runs all hooks inside Docker — no host Python required.
 
 ---
 
