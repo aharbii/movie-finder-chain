@@ -43,7 +43,10 @@
   "forwardPorts": [],
   "name": "movie-finder-chain",
   "overrideCommand": false,
-  "postCreateCommand": "echo 'Chain devcontainer ready. Run: make up'",
+  "postCreateCommand": "git config --global --add safe.directory /workspace && git config --global --add safe.directory '*' && echo 'Chain devcontainer ready. Run: make up'",
+  "remoteEnv": {
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1"
+  },
   "remoteUser": "root",
   "service": "chain",
   "shutdownAction": "stopCompose",
