@@ -33,6 +33,9 @@ class ChainConfig(BaseSettings):
         rag_top_k: Number of candidates to fetch from Qdrant.
         max_refinements: Max discovery refinement loops before dead-ending.
         imdb_search_limit: Max hits per IMDb search query.
+        imdb_search_concurrency: Max concurrent IMDb search requests.
+        imdb_retry_base_delay_seconds: Fallback retry delay on rate limits.
+        imdb_node_timeout_seconds: Hard timeout for the IMDb enrichment node.
         confidence_threshold: Minimum IMDb match score to present to user.
         log_level: Logging level (INFO, DEBUG, etc.).
     """
@@ -69,6 +72,13 @@ class ChainConfig(BaseSettings):
     rag_top_k: int = Field(8, alias="RAG_TOP_K")
     max_refinements: int = Field(3, alias="MAX_REFINEMENTS")
     imdb_search_limit: int = Field(3, alias="IMDB_SEARCH_LIMIT")
+    imdb_search_concurrency: int = Field(2, alias="IMDB_SEARCH_CONCURRENCY", ge=1)
+    imdb_retry_base_delay_seconds: float = Field(
+        2.0,
+        alias="IMDB_RETRY_BASE_DELAY_SECONDS",
+        gt=0,
+    )
+    imdb_node_timeout_seconds: float = Field(10.0, alias="IMDB_NODE_TIMEOUT_SECONDS", gt=0)
     confidence_threshold: float = Field(0.3, alias="CONFIDENCE_THRESHOLD")
 
     # --- Logging ---

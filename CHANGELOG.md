@@ -23,10 +23,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Added `checkpoint_lifespan()` and `DATABASE_URL` support so LangGraph can use
   `AsyncPostgresSaver` instead of process-local memory in production
 - Locked the RAG search service's lazy singleton behavior in tests so OpenAI
-  and Qdrant clients remain process-scoped
-- IMDb enrichment is now fully sequential (no concurrent semaphore) to avoid
-  Cloudflare rate-limit bursts; pipeline respects `retry_after` from HTTP 429
-  response body; no per-node timeout — enrichment always completes
+  and Qdrant clients remain process-scoped, including under concurrent node
+  invocations
+- IMDb enrichment now uses semaphore-bounded concurrent search, a 2-second
+  fallback retry delay, and a 10-second hard node timeout that degrades back to
+  RAG-only candidates instead of stalling the stream indefinitely
 - Candidate list trimmed to `_MAX_ENRICH_CANDIDATES = 5` before enrichment;
   RAG_TOP_K remains at 8 to keep the semantic net wide
 - `validation` node no longer requires `imdb_id` — degraded candidates with

@@ -33,7 +33,7 @@ User message
 | Node              | Model                      | Responsibility                                                  |
 | ----------------- | -------------------------- | --------------------------------------------------------------- |
 | `rag_search`      | —                          | Embed query with OpenAI, search Qdrant, return top-k candidates |
-| `imdb_enrichment` | —                          | Parallel IMDB search + `batch_get` for full metadata            |
+| `imdb_enrichment` | —                          | Bounded-concurrency IMDb search + timeout-capped enrichment     |
 | `validation`      | —                          | Filter by confidence, deduplicate by IMDb ID, cap at 5          |
 | `presentation`    | —                          | Format candidate pool as an AI message for the user             |
 | `confirmation`    | Claude Haiku               | Classify user response: confirmed / not_found / unclear         |
@@ -148,6 +148,10 @@ cp .env.example .env
 | `REASONING_MODEL`        | optional  | Default: `claude-sonnet-4-6`                         |
 | `RAG_TOP_K`              | optional  | Qdrant result count (default: `8`)                   |
 | `MAX_REFINEMENTS`        | optional  | Max refinement cycles before dead-end (default: `3`) |
+| `IMDB_SEARCH_LIMIT`      | optional  | Max IMDb search hits per candidate (default: `3`)    |
+| `IMDB_SEARCH_CONCURRENCY` | optional | Max concurrent IMDb search requests (default: `2`)   |
+| `IMDB_RETRY_BASE_DELAY_SECONDS` | optional | Fallback retry delay on IMDb 429s (default: `2.0`) |
+| `IMDB_NODE_TIMEOUT_SECONDS` | optional | Hard timeout before degrading to RAG-only results (default: `10.0`) |
 | `CONFIDENCE_THRESHOLD`   | optional  | Minimum IMDb match confidence (default: `0.3`)       |
 | `LANGSMITH_TRACING`      | optional  | `true` to enable LangSmith tracing                   |
 | `LANGSMITH_API_KEY`      | optional  | LangSmith API key                                    |
@@ -155,6 +159,10 @@ cp .env.example .env
 
 `make test` and `make test-coverage` do not require live Qdrant or LLM
 credentials because the test suite fully stubs those integrations.
+
+The IMDb enrichment node is intentionally latency-bounded. If IMDb search or
+metadata fetches overrun `IMDB_NODE_TIMEOUT_SECONDS`, the chain returns degraded
+RAG-only candidates instead of stalling the user-facing stream.
 
 `QDRANT_API_KEY_RW` is intentionally absent from this repo. The chain is a
 read-only Qdrant consumer and never writes to the collection.
