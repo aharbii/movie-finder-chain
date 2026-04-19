@@ -77,7 +77,9 @@ class TestRagSearchNode:
         with (
             patch("chain.nodes.rag_search.get_config", return_value=mock_config),
             patch("chain.nodes.rag_search.MovieSearchService") as mock_service_cls,
-            patch("chain.nodes.rag_search.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+            patch(
+                "chain.nodes.rag_search.asyncio.to_thread", new_callable=AsyncMock
+            ) as mock_to_thread,
         ):
             mock_service = MagicMock()
             mock_service.search.return_value = mock_candidates
