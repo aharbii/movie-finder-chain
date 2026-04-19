@@ -1,0 +1,37 @@
+---
+description: Python coding standards and LangGraph design patterns — auto-loads on Python files.
+globs: ["**/*.py"]
+alwaysApply: false
+---
+
+# Python Standards — chain submodule
+
+## Toolchain
+
+- Python 3.13, `uv` workspace member of `backend/`
+- `ruff` (line length 100), `mypy --strict`
+- `pytest --asyncio-mode=auto`
+- Run all checks from `backend/`: `make lint && make typecheck && make test`
+
+## Hard rules
+
+- No bare `except:` — catch specific types
+- No `os.getenv()` — use `config.py` Pydantic `BaseSettings`
+- No `print()` — use structured logging
+- No `type: ignore` without explanation
+- No blocking I/O in async context
+- Google-style docstrings on all public functions and classes
+
+## LangGraph patterns — strictly enforced
+
+| Pattern          | Rule                                                                               |
+|------------------|------------------------------------------------------------------------------------|
+| **State machine**| New behaviour = new node or edge — never add conditional branches inside a node    |
+| **Pure nodes**   | Nodes are pure functions: `(state: MovieFinderState) → dict` — no side effects     |
+| **Strategy**     | New LLM/embedding provider = new class — no `if model == "claude"` branching       |
+| **Factory**      | Node wiring stays in `graph.py` — nodes never reference each other directly        |
+| **Config**       | All env vars in `config.py` once — never `os.getenv()` inside a node               |
+
+## State contract
+
+`MovieFinderState` fields in `state.py` are the pipeline's shared contract. Any field change affects every node and the SSE output to `backend/app/`. Coordinate changes with an ADR.

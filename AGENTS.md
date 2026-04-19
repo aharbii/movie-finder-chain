@@ -1,6 +1,9 @@
 # OpenAI Codex CLI — chain submodule
 
-Foundational mandate for `movie-finder-chain` (`backend/chain/`).
+This is **`movie-finder-chain`** (`backend/chain/`) — part of the Movie Finder project.
+GitHub repo: `aharbii/movie-finder-chain` · Parent repo: `aharbii/movie-finder`
+
+> See root AGENTS.md for: full submodule map, GitHub issue/PR hygiene, coding standards, branching strategy, session start protocol.
 
 ---
 
@@ -32,34 +35,17 @@ IMDb enrichment is performed via the `imdbapi` submodule (path dependency).
 
 ---
 
-## Pre-commit & Linting
+## Common tasks
 
-- Docker-only local workflow from this directory: `make lint`, `make format`, `make typecheck`,
-  `make test`, `make pre-commit`.
-- `mypy --strict` must pass for all nodes.
+```bash
+make lint / make format / make typecheck / make test / make pre-commit
+```
 
----
-
-## Workflow invariants
-
-- This repo is the gitlink path `chain` inside `aharbii/movie-finder-backend`. Parent
-  workflow/path filters must use `chain`, not `chain/**`.
-- Cross-repo tracker issues originate in `aharbii/movie-finder`. Create the linked child issue in
-  this repo only if this repo will actually change.
-- Inspect `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md` when present, and a
-  recent example before creating or editing issues/PRs. Do not improvise titles or bodies.
-- For child issues in this repo, use `.github/ISSUE_TEMPLATE/linked_task.yml` and keep the
-  description, file references, and acceptance criteria repo-specific.
-- If CI, required checks, or merge policy changes affect this repo, update contributor-facing docs
-  here and in `aharbii/movie-finder-backend` and/or `aharbii/movie-finder` where relevant.
-- If a new standalone issue appears mid-session, branch from `main` unless stacking is explicitly
-  requested.
-- PR descriptions must disclose the AI authoring tool + model. Any AI-assisted review comment or
-  approval must also disclose the review tool + model.
+Docker-only local workflow. `mypy --strict` must pass for all nodes.
 
 ---
 
-## VSCode setup
+## VS Code setup
 
 `backend/chain/.vscode/` — full workspace configuration for chain only.
 
@@ -67,5 +53,17 @@ IMDb enrichment is performed via the `imdbapi` submodule (path dependency).
 - Interpreter: `/opt/venv/bin/python` inside the attached container
 - `launch.json`: `chat.py` interactive runner + pytest all/current file in the attached container
 - `tasks.json`: Docker-backed `make ...` targets from `backend/chain/`
-- Modifying configs: keep parity with `backend/.vscode/` aggregate tasks. Update `CLAUDE.md`,
-  `GEMINI.md`, `AGENTS.md`, and the repo's `.github/copilot-instructions.md` after.
+
+---
+
+## Workflow invariants (chain-specific)
+
+- Gitlink path is `chain` inside `aharbii/movie-finder-backend`. Parent path filters must use `chain`, not `chain/**`.
+- Embedding model change here requires coordinating with `rag/` — query-time and ingestion-time embeddings must match.
+
+### Submodule pointer bump
+
+```bash
+git add chain && git commit -m "chore(chain): bump to latest main"   # in backend/
+git add backend && git commit -m "chore(backend): bump to latest main"  # in root
+```

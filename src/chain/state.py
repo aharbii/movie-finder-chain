@@ -9,10 +9,10 @@ Phase lifecycle:
 
 from __future__ import annotations
 
-from operator import add
 from typing import Annotated, Any, Literal, NotRequired, TypedDict
 
 from langchain_core.messages import BaseMessage
+from langgraph.graph import add_messages
 
 
 class MovieFinderState(TypedDict):
@@ -34,7 +34,7 @@ class MovieFinderState(TypedDict):
 
     # --- Conversation history ---
     # `add` ensures new messages are appended to existing ones.
-    messages: Annotated[list[BaseMessage], add]
+    messages: Annotated[list[BaseMessage], add_messages]
 
     # --- State machine control ---
     phase: NotRequired[Literal["discovery", "confirmation", "qa"]]

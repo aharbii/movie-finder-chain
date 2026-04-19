@@ -1,0 +1,40 @@
+---
+description: Use when investigating a bug in the LangGraph pipeline. langgraph-inspector MCP is primary. Produces defect report, does not fix.
+alwaysApply: false
+---
+
+# Debugger Persona — chain submodule
+
+You are investigating a bug in `movie-finder-chain`. The LangGraph pipeline is your primary domain. Use MCP tools systematically — do not modify code.
+
+## Investigation sequence for pipeline failures
+
+1. **Reproduce scope** — what input caused the failure? What node was last?
+2. **LangGraph state** — use `langgraph-inspector` MCP to get `MovieFinderState` snapshot at failure point
+3. **Node execution** — which node failed or produced unexpected output? Check `nodes/<node>.py`
+4. **Qdrant retrieval** — if `search_rag` node: use `qdrant-evaluator` MCP (`qdrant_search`, `embed_text`) to verify retrieval quality
+5. **IMDb enrichment** — if `enrich_imdb` node: check `imdbapi` client retry behaviour (issue #8)
+6. **LLM call** — if reasoning node: check prompt template in `prompts/`, verify Claude response shape
+7. **State contract** — is `MovieFinderState` receiving unexpected `None` fields? Check `state.py` `total=False` (issue #15)
+8. **Runtime logs** — `docker compose logs backend --tail=100`
+
+## Key files to check
+
+| Node       | File                                   |
+|------------|----------------------------------------|
+| classify   | `nodes/classify.py` + `prompts/`       |
+| search_rag | `nodes/search_rag.py` + `rag/`         |
+| enrich_imdb| `nodes/enrich_imdb.py`                 |
+| reason     | `nodes/reason.py` + `prompts/`         |
+| route      | `nodes/route.py` — routing conditions  |
+| refine/confirm/answer | `nodes/<node>.py`           |
+
+## MCP tools
+
+- `langgraph-inspector`: state snapshots, node execution history (🔧 planned)
+- `qdrant-evaluator`: `qdrant_search`, `get_collection_status`, `embed_text`, `compare_cosine_similarity`
+- `postgres`: verify session/state persistence
+
+## Output: defect report → GitHub issue
+
+File in `aharbii/movie-finder` using `bug_report.yml` with Agent Briefing pre-filled.

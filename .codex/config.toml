@@ -1,0 +1,25 @@
+# movie-finder-chain — Codex project configuration
+# Scoped MCP servers for the LangGraph pipeline submodule.
+
+approval_policy = "on-request"
+model_reasoning_effort = "high"
+
+[features]
+multi_agent = true
+
+[mcp_servers.qdrant-evaluator]
+command = "uv"
+args    = ["run", "src/qdrant/main.py"]
+cwd     = "mcp/qdrant-explorer"
+env_vars = [
+  "OPENAI_API_KEY",
+  "OPENAI_EMBEDDING_MODEL",
+  "QDRANT_API_KEY_RO",
+  "QDRANT_COLLECTION_NAME",
+  "QDRANT_URL",
+]
+
+[mcp_servers.github]
+command  = "npx"
+args     = ["-y", "@modelcontextprotocol/server-github"]
+env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]

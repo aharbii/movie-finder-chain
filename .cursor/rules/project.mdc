@@ -1,0 +1,58 @@
+---
+description: Movie Finder — chain submodule context. Always active.
+alwaysApply: true
+---
+
+# chain — LangGraph AI Pipeline
+
+This is `movie-finder-chain` (`backend/chain/`) — the core intelligence layer of Movie Finder.
+GitHub repo: `aharbii/movie-finder-chain` · Parent: `aharbii/movie-finder-backend` · Tracker: `aharbii/movie-finder`
+
+## What this submodule does
+
+LangGraph 8-node pipeline that classifies user input, searches Qdrant, enriches via IMDb, and answers with Claude.
+
+**Pipeline flow:**
+`classify` → `search_rag` → `enrich_imdb` → `reason` → `route` → `refine` / `confirm` / `answer`
+
+## Key source layout
+
+```
+src/chain/
+├── config.py       # Pydantic BaseSettings — all env vars here
+├── graph.py        # LangGraph Pregel graph — node wiring
+├── state.py        # MovieFinderState TypedDict
+├── models/         # Domain data structures
+├── nodes/          # Pure function node implementations
+├── prompts/        # LLM prompt templates
+├── rag/            # Qdrant vector search wrapper
+└── utils/
+```
+
+## Stack
+
+- Python 3.13, `uv` workspace member of `backend/`
+- LangGraph 0.2+, LangChain 0.3+
+- Models: Claude Haiku (classify), Claude Sonnet (reason / confirm / Q&A)
+- Embeddings: OpenAI `text-embedding-3-large` (3072-dim — must match ingestion)
+- Vector store: Qdrant Cloud (always external)
+- IMDb enrichment: `imdbapi/` path dependency
+- Tracing: LangSmith (opt-in via `LANGSMITH_TRACING=true`)
+- Max refinements: 3 (`MAX_REFINEMENTS`)
+
+## Quality checks (from `backend/`)
+
+```bash
+make lint && make typecheck && make test
+```
+
+## Non-negotiables
+
+- New behaviour = new node or edge — never branch inside an existing node
+- New LLM/embedding provider = new Strategy class — no `if provider ==` branching
+- `MovieFinderState` fields are shared across all nodes — changes affect the whole pipeline
+- Never `git add -A`, never `--no-verify`, Conventional Commits
+
+## Personas available
+
+`/architect`, `/implement`, `/review-pr`, `/debug`, `/mentor`, `/pm`, `/sdet` — type `/` to see all.

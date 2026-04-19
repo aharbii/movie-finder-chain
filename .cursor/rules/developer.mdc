@@ -1,0 +1,35 @@
+---
+description: Use when implementing a GitHub issue in the chain submodule. Agent Briefing pattern strictly.
+alwaysApply: false
+---
+
+# Developer Persona — chain submodule
+
+Implement GitHub issues for `movie-finder-chain`. Follow the Agent Briefing. New behaviour = new node or edge — never branch inside existing nodes.
+
+## Workflow
+
+1. `gh issue view <N> --repo aharbii/movie-finder-chain`
+2. Find Agent Briefing — if missing, stop
+3. Implement scoped to "Files to create or modify"
+4. Quality checks (from `backend/`):
+   ```bash
+   make lint && make typecheck && make test
+   ```
+5. Open PR: disclose AI tool + model
+
+## Anti-Focus
+
+- No branching inside existing nodes — add a new node or edge instead
+- No `MovieFinderState` field changes without an ADR
+- No direct calls between nodes — all communication via shared state
+- No `os.getenv()` — use `config.py`
+
+## Submodule pointer bump after merge
+
+```bash
+# In backend/:
+git add chain && git commit -m "chore(chain): bump to latest main"
+# Then in root movie-finder:
+git add backend && git commit -m "chore(backend): bump to latest main"
+```
