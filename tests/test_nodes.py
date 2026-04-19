@@ -14,6 +14,7 @@ Tests validate:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -48,6 +49,49 @@ class TestRagSearchNode:
 
         assert first is second
         mock_service_cls.assert_called_once_with(mock_config)
+        _get_search_service.cache_clear()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_node_invocations_reuse_singleton_service(
+        self, mock_config: Any
+    ) -> None:
+        _get_search_service.cache_clear()
+
+        mock_candidates = [
+            MagicMock(
+                model_dump=lambda: {
+                    "title": "Inception",
+                    "release_year": 2010,
+                    "director": "",
+                    "genre": [],
+                    "cast": [],
+                    "plot": "",
+                }
+            )
+        ]
+        state = {
+            "messages": [HumanMessage(content="A movie where dreams are invaded")],
+            "user_plot_query": "",
+        }
+
+        with (
+            patch("chain.nodes.rag_search.get_config", return_value=mock_config),
+            patch("chain.nodes.rag_search.MovieSearchService") as mock_service_cls,
+            patch("chain.nodes.rag_search.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread,
+        ):
+            mock_service = MagicMock()
+            mock_service.search.return_value = mock_candidates
+            mock_service_cls.return_value = mock_service
+            mock_to_thread.return_value = mock_candidates
+
+            results = await asyncio.gather(
+                *[rag_search_node(state, {}) for _ in range(10)]  # type: ignore[arg-type]
+            )
+
+        assert len(results) == 10
+        assert all(result["rag_candidates"][0]["title"] == "Inception" for result in results)
+        mock_service_cls.assert_called_once_with(mock_config)
+        assert mock_to_thread.await_count == 10
         _get_search_service.cache_clear()
 
     @pytest.mark.asyncio
@@ -212,12 +256,17 @@ class TestImdbEnrichmentNode:
         self, mock_config: Any, sample_rag_candidates: list[dict[str, Any]]
     ) -> None:
         state = {"rag_candidates": sample_rag_candidates[:1]}
+        cfg = mock_config.model_copy(update={"imdb_node_timeout_seconds": 0.01})
+
+        async def slow_run(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+            await asyncio.sleep(0.05)
+            return []
 
         with (
-            patch("chain.nodes.imdb_enrichment.get_config", return_value=mock_config),
+            patch("chain.nodes.imdb_enrichment.get_config", return_value=cfg),
             patch(
                 "chain.nodes.imdb_enrichment._run_imdb_enrichment",
-                new=AsyncMock(side_effect=TimeoutError),
+                new=slow_run,
             ),
         ):
             result = await imdb_enrichment_node(state)  # type: ignore[arg-type]
@@ -228,6 +277,48 @@ class TestImdbEnrichmentNode:
         assert enriched[0]["imdb_id"] is None
         assert enriched[0]["imdb_title"] is None
         assert enriched[0]["confidence"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_searches_candidates_with_bounded_concurrency(
+        self, mock_config: Any, sample_rag_candidates: list[dict[str, Any]]
+    ) -> None:
+        cfg = mock_config.model_copy(update={"imdb_search_concurrency": 2})
+        state = {"rag_candidates": sample_rag_candidates[:3]}
+        counters = {"current": 0, "max": 0}
+
+        async def fake_search_best_match(
+            client: Any,
+            candidate: dict[str, Any],
+            search_limit: int,
+            *,
+            semaphore: asyncio.Semaphore,
+            retry_base_delay_seconds: float,
+        ) -> tuple[dict[str, Any], str | None, float]:
+            assert search_limit == cfg.imdb_search_limit
+            assert retry_base_delay_seconds == cfg.imdb_retry_base_delay_seconds
+            async with semaphore:
+                counters["current"] += 1
+                counters["max"] = max(counters["max"], counters["current"])
+                await asyncio.sleep(0.01)
+                counters["current"] -= 1
+            return candidate, None, 0.0
+
+        mock_client = AsyncMock()
+        with (
+            patch("chain.nodes.imdb_enrichment.get_config", return_value=cfg),
+            patch("chain.nodes.imdb_enrichment.IMDBAPIClient") as mock_client_cls,
+            patch(
+                "chain.nodes.imdb_enrichment._search_best_match",
+                new=fake_search_best_match,
+            ),
+        ):
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await imdb_enrichment_node(state)  # type: ignore[arg-type]
+
+        assert counters["max"] == 2
+        assert len(result["enriched_movies"]) == 3
 
 
 class TestComputeConfidence:
