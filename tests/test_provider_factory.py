@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from chain.config import (
     ChainConfig,
+    configure_runtime_config,
+    get_config,
     resolve_vector_collection_name,
     sanitize_model_name,
 )
@@ -62,6 +64,20 @@ def test_config_rejects_unknown_providers(monkeypatch: pytest.MonkeyPatch) -> No
 def test_config_exposes_generic_vector_collection_name(mock_config: ChainConfig) -> None:
     assert mock_config.vector_collection_name == "movies_text_embedding_3_large_3072"
     assert mock_config.qdrant_collection_name == mock_config.vector_collection_name
+
+
+def test_config_can_be_supplied_by_backend_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLASSIFIER_PROVIDER", "anthropic")
+    runtime_config = ChainConfig(classifier_provider="ollama", classifier_model="llama3.1:8b")
+
+    configure_runtime_config(runtime_config)
+    try:
+        assert get_config() is runtime_config
+        assert get_config().classifier_provider == "ollama"
+    finally:
+        configure_runtime_config(None)
+
+    assert get_config().classifier_provider == "anthropic"
 
 
 def test_classifier_llm_uses_configured_provider(monkeypatch: pytest.MonkeyPatch) -> None:

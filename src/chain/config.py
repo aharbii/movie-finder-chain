@@ -21,6 +21,7 @@ VectorStoreProvider = Literal["qdrant", "chromadb", "pinecone", "pgvector"]
 _SANITIZE_PATTERN = re.compile(r"[\/.\-\s]+")
 _INVALID_PATTERN = re.compile(r"[^a-z0-9_]+")
 _MULTI_UNDERSCORE_PATTERN = re.compile(r"_+")
+_runtime_config: ChainConfig | None = None
 
 
 class ChainConfig(BaseSettings):
@@ -70,6 +71,7 @@ class ChainConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # --- Qdrant ---
@@ -215,7 +217,26 @@ def get_config() -> ChainConfig:
     Returns:
         The singleton ChainConfig.
     """
-    return ChainConfig()
+    return _runtime_config if _runtime_config is not None else ChainConfig()
+
+
+def configure_runtime_config(config: ChainConfig | None) -> None:
+    """Set an explicit runtime config supplied by the backend composition root.
+
+    This keeps the chain usable as a standalone package while allowing the
+    deployed FastAPI app to validate and pass provider settings once during
+    lifespan startup.
+    """
+    global _runtime_config
+    _runtime_config = config
+    get_config.cache_clear()
+    from chain.rag.vector_store import get_vector_search_provider
+    from chain.utils.llm_factory import get_classifier_llm, get_query_embedder, get_reasoning_llm
+
+    get_classifier_llm.cache_clear()
+    get_reasoning_llm.cache_clear()
+    get_query_embedder.cache_clear()
+    get_vector_search_provider.cache_clear()
 
 
 def resolve_vector_collection_name(prefix: str, model: str, dimension: int) -> str:

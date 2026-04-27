@@ -23,19 +23,20 @@ def test_required_helper() -> None:
         _required(None, "ENV_VAR")
 
 
-@patch("openai.OpenAI")
-def test_openai_query_embedder(mock_openai_cls: MagicMock) -> None:
+def test_openai_query_embedder() -> None:
     mock_client = MagicMock()
-    mock_openai_cls.return_value = mock_client
+    mock_module = MagicMock()
+    mock_module.OpenAI.return_value = mock_client
 
     mock_response = MagicMock()
     mock_response.usage.total_tokens = 42
     mock_response.data = [MagicMock(embedding=[0.1, 0.2])]
     mock_client.embeddings.create.return_value = mock_response
 
-    embedder = OpenAIQueryEmbedder(api_key="test-key", model="test-model")
+    with patch.dict(sys.modules, {"openai": mock_module}):
+        embedder = OpenAIQueryEmbedder(api_key="test-key", model="test-model")
 
-    result = embedder.embed_query("test query")
+        result = embedder.embed_query("test query")
     assert result == [0.1, 0.2]
     assert embedder.last_token_count == 42
     mock_client.embeddings.create.assert_called_once_with(input="test query", model="test-model")
@@ -43,16 +44,20 @@ def test_openai_query_embedder(mock_openai_cls: MagicMock) -> None:
 
 def test_build_chat_model_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    with patch("langchain_anthropic.ChatAnthropic") as mock_cls:
+    mock_module = MagicMock()
+    with patch.dict(sys.modules, {"langchain_anthropic": mock_module}):
         _build_chat_model(provider="anthropic", model="claude-3")
-        mock_cls.assert_called_once_with(model_name="claude-3", api_key=SecretStr("test-key"))
+        mock_module.ChatAnthropic.assert_called_once_with(
+            model_name="claude-3", api_key=SecretStr("test-key")
+        )
 
 
 def test_build_chat_model_openai(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    with patch("langchain_openai.ChatOpenAI") as mock_cls:
+    mock_module = MagicMock()
+    with patch.dict(sys.modules, {"langchain_openai": mock_module}):
         _build_chat_model(provider="openai", model="gpt-4")
-        mock_cls.assert_called_once_with(model="gpt-4", api_key=SecretStr("test-key"))
+        mock_module.ChatOpenAI.assert_called_once_with(model="gpt-4", api_key=SecretStr("test-key"))
 
 
 def test_build_chat_model_groq(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -65,9 +70,10 @@ def test_build_chat_model_groq(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_build_chat_model_together(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOGETHER_API_KEY", "test-key")
-    with patch("langchain_openai.ChatOpenAI") as mock_cls:
+    mock_module = MagicMock()
+    with patch.dict(sys.modules, {"langchain_openai": mock_module}):
         _build_chat_model(provider="together", model="llama3")
-        mock_cls.assert_called_once_with(
+        mock_module.ChatOpenAI.assert_called_once_with(
             model="llama3", api_key=SecretStr("test-key"), base_url="https://api.together.xyz/v1"
         )
 
