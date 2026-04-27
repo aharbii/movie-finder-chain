@@ -77,13 +77,11 @@ class ChainConfig(BaseSettings):
     # --- Qdrant ---
     qdrant_url: str | None = Field(
         None,
-        validation_alias=AliasChoices("QDRANT_URL", "VECTOR_STORE_URL"),
+        alias="QDRANT_URL",
     )
     qdrant_api_key_ro: str | None = Field(
         None,
-        validation_alias=AliasChoices(
-            "QDRANT_API_KEY_RO", "QDRANT_API_KEY", "VECTOR_STORE_API_KEY"
-        ),
+        validation_alias=AliasChoices("QDRANT_API_KEY_RO", "QDRANT_API_KEY"),
     )
     vector_store: VectorStoreProvider = Field("qdrant", alias="VECTOR_STORE")
     vector_collection_prefix: str = Field(
@@ -96,18 +94,12 @@ class ChainConfig(BaseSettings):
         "outputs/chromadb/local",
         alias="CHROMADB_PERSIST_PATH",
     )
-    pinecone_api_key: str | None = Field(
-        None,
-        validation_alias=AliasChoices("PINECONE_API_KEY", "VECTOR_STORE_API_KEY"),
-    )
+    pinecone_api_key: str | None = Field(None, alias="PINECONE_API_KEY")
     pinecone_index_name: str = Field("movie-finder-rag", alias="PINECONE_INDEX_NAME")
     pinecone_index_host: str | None = Field(None, alias="PINECONE_INDEX_HOST")
     pinecone_cloud: str = Field("aws", alias="PINECONE_CLOUD")
     pinecone_region: str = Field("us-east-1", alias="PINECONE_REGION")
-    pgvector_dsn: str | None = Field(
-        None,
-        validation_alias=AliasChoices("PGVECTOR_DSN", "VECTOR_STORE_URL"),
-    )
+    pgvector_dsn: str | None = Field(None, alias="PGVECTOR_DSN")
     pgvector_schema: str = Field("public", alias="PGVECTOR_SCHEMA")
 
     # --- LLM Providers ---
@@ -178,7 +170,6 @@ class ChainConfig(BaseSettings):
 
     @field_validator(
         "qdrant_url",
-        "vector_store_url",
         "langsmith_endpoint",
         "ollama_base_url",
         mode="before",
