@@ -17,7 +17,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Query-time vector store providers for Qdrant, ChromaDB, Pinecone, and pgvector
   using the shared `{prefix}_{sanitized_model}_{dimension}` target naming contract
 - Optional dependency groups for local/cloud provider SDKs (`local`, `cloud`,
-  `all-providers`)
+  `default-cloud`, `ollama-qdrant`, `all-providers`)
 - `LOG_FORMAT` env var documented in `.env.example` — `text` (default) or `json`
   for Azure Monitor / structured log pipelines
 - GitHub Actions CI workflow (`.github/workflows/ci.yml`) mirroring Jenkins 1:1:
@@ -66,6 +66,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `reports/` entry
 - Branch coverage is now enabled in the Docker-backed coverage target with 90%
   Jenkins and GitHub Actions quality thresholds
+- Generic vector URL/API-key fallbacks now resolve inside the vector-store
+  factory instead of sharing the same Pydantic settings alias across multiple
+  provider-specific fields
 
 ---
 
