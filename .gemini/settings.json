@@ -27,7 +27,7 @@
         "src/qdrant/main.py"
       ],
       "command": "uv",
-      "cwd": "/home/aharbi/workset/movie-finder/mcp/qdrant-explorer"
+      "cwd": "${MOVIE_FINDER_ROOT}/mcp/qdrant-explorer"
     }
   }
 }
