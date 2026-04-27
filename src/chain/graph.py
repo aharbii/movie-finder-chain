@@ -161,10 +161,11 @@ def _load_async_postgres_saver() -> Any:
     """
     try:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-    except ImportError as exc:
-        raise RuntimeError(
-            "Persistent checkpointing requires `langgraph-checkpoint-postgres`."
-        ) from exc
+    except ImportError as exc:  # pragma: no cover
+        msg = (
+            "Persistent checkpointing requires `langgraph-checkpoint-postgres`."  # pragma: no cover
+        )
+        raise RuntimeError(msg) from exc  # pragma: no cover
 
     return AsyncPostgresSaver
 

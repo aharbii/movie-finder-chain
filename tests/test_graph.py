@@ -9,7 +9,9 @@ the compiled object exposes the expected interface.
 
 from __future__ import annotations
 
-from typing import cast
+import os
+import sys
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -128,6 +130,109 @@ class TestCompileGraph:
             "__end__",
         }
         assert expected.issubset(node_names)
+
+
+class TestSetupTracingEnv:
+    def test_apply_langsmith_env_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from chain.graph import _apply_langsmith_env
+
+        # Unset just in case
+        for k in [
+            "LANGSMITH_TRACING",
+            "LANGSMITH_PROJECT",
+            "LANGSMITH_API_KEY",
+            "LANGCHAIN_TRACING_V2",
+            "LANGCHAIN_PROJECT",
+            "LANGCHAIN_API_KEY",
+            "LANGCHAIN_ENDPOINT",
+            "LANGSMITH_ENDPOINT",
+        ]:
+            monkeypatch.delenv(k, raising=False)
+
+        config = MagicMock()
+        config.langsmith_tracing = True
+        config.langsmith_project = "test-project"
+        config.langsmith_api_key = "test-key"
+        config.langsmith_endpoint = "http://test"
+
+        with patch("chain.config.get_config", return_value=config):
+            _apply_langsmith_env()
+
+        assert os.environ["LANGSMITH_TRACING"] == "true"
+        assert os.environ["LANGSMITH_PROJECT"] == "test-project"
+        assert os.environ["LANGSMITH_API_KEY"] == "test-key"
+
+    def test_apply_langsmith_env_enabled_no_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from chain.graph import _apply_langsmith_env
+
+        # Unset just in case
+        for k in [
+            "LANGSMITH_TRACING",
+            "LANGSMITH_PROJECT",
+            "LANGSMITH_API_KEY",
+            "LANGCHAIN_TRACING_V2",
+            "LANGCHAIN_PROJECT",
+            "LANGCHAIN_API_KEY",
+            "LANGCHAIN_ENDPOINT",
+            "LANGSMITH_ENDPOINT",
+        ]:
+            monkeypatch.delenv(k, raising=False)
+
+        config = MagicMock()
+        config.langsmith_tracing = True
+        config.langsmith_project = "test-project"
+        config.langsmith_api_key = None
+        config.langsmith_endpoint = "http://test"
+
+        with patch("chain.config.get_config", return_value=config):
+            _apply_langsmith_env()
+
+        assert os.environ["LANGSMITH_TRACING"] == "true"
+        assert "LANGSMITH_API_KEY" not in os.environ
+        assert "LANGCHAIN_API_KEY" not in os.environ
+
+    def test_apply_langsmith_env_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from chain.config import ChainConfig
+        from chain.graph import _apply_langsmith_env
+
+        monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+        config = ChainConfig(langsmith_tracing=False)
+
+        with patch("chain.config.get_config", return_value=config):
+            _apply_langsmith_env()
+
+        assert "LANGSMITH_TRACING" not in os.environ
+
+
+class TestLazyImport:
+    def test_load_async_postgres_saver_success(self) -> None:
+        from chain.graph import _load_async_postgres_saver
+
+        mock_module = MagicMock()
+        mock_module.AsyncPostgresSaver = "mocked_saver"
+
+        with patch.dict(sys.modules, {"langgraph.checkpoint.postgres.aio": mock_module}):
+            saver = _load_async_postgres_saver()
+            assert saver == "mocked_saver"
+
+    def test_load_async_postgres_saver_missing(self) -> None:
+        from chain.graph import _load_async_postgres_saver
+
+        orig_import = __import__
+
+        def mock_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            if "langgraph.checkpoint.postgres" in name:
+                raise ImportError("mocked import error")
+            return orig_import(name, *args, **kwargs)
+
+        with (
+            patch("builtins.__import__", side_effect=mock_import),
+            pytest.raises(
+                RuntimeError,
+                match="Persistent checkpointing requires `langgraph-checkpoint-postgres`",
+            ),
+        ):
+            _load_async_postgres_saver()
 
 
 class TestCheckpointLifespan:

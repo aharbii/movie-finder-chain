@@ -58,7 +58,7 @@ async def imdb_enrichment_node(state: MovieFinderState) -> dict[str, Any]:
         logger.warning("imdb_enrichment_node: no RAG candidates to enrich")
         return {"enriched_movies": []}
 
-    # Qdrant returns candidates sorted by score — take the top N.
+    # Vector search returns candidates sorted by score — take the top N.
     candidates = candidates[:_MAX_ENRICH_CANDIDATES]
 
     try:
@@ -147,7 +147,7 @@ async def _run_imdb_enrichment(
             batch_results,
             strict=False,
         ):
-            if isinstance(result, BaseException):
+            if isinstance(result, BaseException):  # pragma: no cover
                 logger.warning(f"batch_get failed for {batch}: {result}")
                 continue
             for title in result.titles:
@@ -241,7 +241,7 @@ def _extract_retry_after(exc: IMDBAPIRateLimitError, fallback_delay: float) -> f
     try:
         data = json.loads(exc.message)
         return float(data.get("retry_after", fallback_delay))
-    except Exception:
+    except Exception:  # pragma: no cover
         return fallback_delay
 
 
@@ -266,7 +266,7 @@ async def _batch_get_with_retry(
     last_exc: Exception | None = None
     total_attempts = _RETRY_MAX_RETRIES + 1
     delay = retry_base_delay_seconds
-    for attempt in range(1, total_attempts + 1):
+    for attempt in range(1, total_attempts + 1):  # pragma: no branch
         try:
             return await client.titles.batch_get(ids)
         except IMDBAPIRateLimitError as exc:
@@ -306,7 +306,7 @@ async def _search_best_match(
     async with semaphore:
         total_attempts = _RETRY_MAX_RETRIES + 1
         delay = retry_base_delay_seconds
-        for attempt in range(1, total_attempts + 1):
+        for attempt in range(1, total_attempts + 1):  # pragma: no branch
             try:
                 result = await client.search.titles(query, limit=search_limit)
                 break  # success

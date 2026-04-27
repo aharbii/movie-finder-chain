@@ -15,12 +15,10 @@ from typing import Any
 
 from imdbapi import IMDBAPIClient
 from imdbapi.langchain.agent import create_movie_agent
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from pydantic import SecretStr
 
-from chain.config import get_config
 from chain.state import MovieFinderState
+from chain.utils.llm_factory import get_reasoning_llm
 from chain.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,7 +33,6 @@ async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
     Returns:
         Partial state update with the agent's response messages and updated phase.
     """
-    cfg = get_config()
     confirmed: dict[str, Any] = state.get("confirmed_movie_data") or {}
     messages: list[BaseMessage] = state.get("messages", [])
 
@@ -43,16 +40,10 @@ async def qa_agent_node(state: MovieFinderState) -> dict[str, Any]:
         logger.warning("qa_agent_node: no confirmed movie data — routing to discovery")
         return {"phase": "discovery"}
 
-    # Use the reasoning model from config (Sonnet)
-    llm = ChatAnthropic(
-        model_name=cfg.reasoning_model,
-        api_key=SecretStr(cfg.anthropic_api_key),
-    )
-
     async with IMDBAPIClient() as client:
         agent = create_movie_agent(
             client,
-            llm=llm,
+            llm=get_reasoning_llm(),
         )
 
         # Build a copy of the last user message with rich movie context prepended.

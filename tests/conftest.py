@@ -18,6 +18,8 @@ import pytest
 
 from chain.config import ChainConfig, get_config
 from chain.models.output import ConfirmationClassification, RefinementPlan
+from chain.rag.vector_store import get_vector_search_provider
+from chain.utils.llm_factory import get_classifier_llm, get_query_embedder, get_reasoning_llm
 
 # ---------------------------------------------------------------------------
 # Config fixture — isolated from real env vars
@@ -26,10 +28,18 @@ from chain.models.output import ConfirmationClassification, RefinementPlan
 
 @pytest.fixture(autouse=True)
 def reset_config_cache() -> Iterator[None]:
-    """Clear the lru_cache on get_config before and after every test."""
+    """Clear cached config/provider singletons before and after every test."""
     get_config.cache_clear()
+    get_classifier_llm.cache_clear()
+    get_reasoning_llm.cache_clear()
+    get_query_embedder.cache_clear()
+    get_vector_search_provider.cache_clear()
     yield
     get_config.cache_clear()
+    get_classifier_llm.cache_clear()
+    get_reasoning_llm.cache_clear()
+    get_query_embedder.cache_clear()
+    get_vector_search_provider.cache_clear()
 
 
 @pytest.fixture(autouse=True)

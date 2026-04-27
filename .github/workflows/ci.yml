@@ -96,7 +96,7 @@ jobs:
           hide_complexity: true
           indicators: true
           output: both
-          thresholds: '10 80'
+          thresholds: '90 95'
 
       - name: Post coverage comment
         if: always() && github.event_name == 'pull_request'

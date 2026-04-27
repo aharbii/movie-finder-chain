@@ -1,29 +1,27 @@
-"""MovieSearchService — thin wrapper around Qdrant + OpenAI embeddings.
+"""MovieSearchService — thin wrapper around query embeddings + vector search.
 
-Replicates the search path from rag_ingestion (QdrantVectorStore.search +
-OpenAIEmbeddingProvider.embed) as a self-contained, importable service so
-the chain package has no hard dependency on the rag_ingestion source tree.
+Replicates the search path from rag_ingestion as a self-contained,
+importable service so the chain package has no hard dependency on the
+rag_ingestion source tree.
 
-The collection name and embedding model must exactly match what was used
-during ingestion (configured via ChainConfig).
+The vector collection name and embedding model must exactly match what was
+used during ingestion (configured via ChainConfig).
 """
 
 from __future__ import annotations
 
-from openai import OpenAI
-from qdrant_client import QdrantClient
-
 from chain.config import ChainConfig
 from chain.models.output import RagCandidate
+from chain.rag.vector_store import EmbeddingModelMetadata, get_vector_search_provider
+from chain.utils.llm_factory import get_query_embedder
 from chain.utils.logger import get_logger
 
 
 class MovieSearchService:
     """Synchronous search service.
 
-    Synchronous because both the OpenAI client (sync variant) and the
-    qdrant-client default interface are synchronous. Callers in async
-    nodes should wrap with ``asyncio.to_thread``.
+    Synchronous because provider SDKs and vector-store client interfaces are
+    synchronous. Callers in async nodes should wrap with ``asyncio.to_thread``.
     """
 
     def __init__(self, config: ChainConfig) -> None:
@@ -32,15 +30,14 @@ class MovieSearchService:
         Args:
             config: ``ChainConfig`` instance (injected so callers can pass a mock in tests).
         """
-        self._collection = config.qdrant_collection_name
-        self._embedding_model = config.embedding_model
-        self.logger = get_logger(self.__class__.__name__)
-
-        self._openai = OpenAI(api_key=config.openai_api_key)
-        self._qdrant = QdrantClient(
-            url=config.qdrant_url,
-            api_key=config.qdrant_api_key_ro,
+        self._embedding_model = EmbeddingModelMetadata(
+            name=config.embedding_model,
+            dimension=config.embedding_dimension,
         )
+        self._collection = config.vector_collection_name
+        self._embedder = get_query_embedder()
+        self._vector_store = get_vector_search_provider()
+        self.logger = get_logger(self.__class__.__name__)
 
     # ------------------------------------------------------------------
     # Public API
@@ -57,7 +54,7 @@ class MovieSearchService:
             List of RagCandidate ordered by cosine similarity (closest first).
         """
         vector = self._embed(query)
-        return self._search_qdrant(vector, top_k)
+        return self._search_vector_store(vector, top_k)
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -72,15 +69,16 @@ class MovieSearchService:
         Returns:
             List of floats representing the embedding.
         """
-        response = self._openai.embeddings.create(
-            input=text,
-            model=self._embedding_model,
+        vector = self._embedder.embed_query(text)
+        token_count = getattr(self._embedder, "last_token_count", None)
+        token_label = f"{token_count} tokens" if isinstance(token_count, int) else "unknown tokens"
+        self.logger.debug(
+            f"Embedded query with {self._embedding_model.name} ({token_label}): {text[:60]!r}"
         )
-        self.logger.debug(f"Embedded query ({response.usage.total_tokens} tokens): {text[:60]!r}")
-        return list(response.data[0].embedding)
+        return vector
 
-    def _search_qdrant(self, vector: list[float], top_k: int) -> list[RagCandidate]:
-        """Query Qdrant for similar vectors.
+    def _search_vector_store(self, vector: list[float], top_k: int) -> list[RagCandidate]:
+        """Query the configured vector store for similar vectors.
 
         Args:
             vector: The query vector.
@@ -89,18 +87,11 @@ class MovieSearchService:
         Returns:
             List of RagCandidate.
         """
-        results = self._qdrant.query_points(
-            collection_name=self._collection,
-            query=vector,
-            with_payload=True,
-            limit=top_k,
-        )
+        results = self._vector_store.search(vector, top_k, self._embedding_model)
 
         candidates: list[RagCandidate] = []
-        for point in results.points:
-            if not point.payload:
-                continue
-            payload = point.payload
+        for hit in results:
+            payload = hit.payload
 
             # Normalise genre / cast — stored as list or "/"-separated string
             genre = _to_list(payload.get("genre", []))
@@ -114,13 +105,12 @@ class MovieSearchService:
                     genre=genre,
                     cast=cast,
                     plot=payload.get("plot", ""),
-                    rag_score=float(point.score),
+                    rag_score=float(hit.score or 0.0),
                 )
             )
 
-        self.logger.info(
-            f"RAG returned {len(candidates)} candidate(s) from collection {self._collection!r}"
-        )
+        target_name = self._vector_store.target_name(self._embedding_model)
+        self.logger.info(f"RAG returned {len(candidates)} candidate(s) from target {target_name!r}")
         for i, c in enumerate(candidates, start=1):
             self.logger.debug(
                 f"  #{i}  {c.title} ({c.release_year or '?'}) | director: {c.director or '—'} | genre: {', '.join(c.genre[:3]) if c.genre else '—'}"

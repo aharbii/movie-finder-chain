@@ -1,7 +1,7 @@
 """Confirmation node.
 
-Reads the user's latest message and classifies it using a lightweight LLM
-(Claude Haiku) with structured output.  Sets ``next_action`` on the state
+Reads the user's latest message and classifies it using the configured
+classifier LLM with structured output.  Sets ``next_action`` on the state
 so the conditional edge after this node can route correctly.
 
 Possible next_action values
@@ -17,13 +17,12 @@ from __future__ import annotations
 import importlib.resources
 from typing import Any, cast
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from pydantic import SecretStr
 
 from chain.config import ChainConfig, get_config
 from chain.models.output import ConfirmationClassification
 from chain.state import MovieFinderState
+from chain.utils.llm_factory import get_classifier_llm
 from chain.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -59,10 +58,7 @@ async def confirmation_node(state: MovieFinderState) -> dict[str, Any]:
         user_message=user_message,
     )
 
-    llm = ChatAnthropic(
-        model_name=cfg.classifier_model,
-        api_key=SecretStr(cfg.anthropic_api_key),
-    ).with_structured_output(ConfirmationClassification)
+    llm = get_classifier_llm().with_structured_output(ConfirmationClassification)
 
     try:
         result = cast(
@@ -208,16 +204,12 @@ async def _generate_confirmation_message(movie: dict[str, Any], cfg: ChainConfig
         "Use markdown for formatting. Keep it concise and upbeat. Do not invent facts not listed above."
     )
 
-    llm = ChatAnthropic(
-        model_name=cfg.classifier_model,
-        api_key=SecretStr(cfg.anthropic_api_key),
-    )
     try:
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        response = await get_classifier_llm().ainvoke([HumanMessage(content=prompt)])
         return str(response.content)
-    except Exception as exc:
-        logger.error(f"Failed to generate confirmation message: {exc}")
-        return f"Great! I've confirmed **{title} ({year})** as your movie. What would you like to know about it?"
+    except Exception as exc:  # pragma: no cover
+        logger.error(f"Failed to generate confirmation message: {exc}")  # pragma: no cover
+        return f"Great! I've confirmed **{title} ({year})** as your movie. What would you like to know about it?"  # pragma: no cover
 
 
 def _load_prompt() -> str:
@@ -233,7 +225,8 @@ def _load_prompt() -> str:
             .read_text(encoding="utf-8")
         )
     except Exception:
-        return (
+        fallback_prompt = (
             'Candidates:\n{candidates_block}\n\nUser said: "{user_message}"\n'
             "Classify as confirmed/not_found/unclear."
         )
+        return fallback_prompt  # pragma: no cover

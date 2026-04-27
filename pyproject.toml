@@ -29,6 +29,30 @@ dependencies = [
     "langchain>=1.2.13",
 ]
 
+[project.optional-dependencies]
+local = [
+    "chromadb>=1.0.0",
+    "langchain-ollama>=1.0.0",
+    "langchain-huggingface>=1.0.0",
+    "pgvector>=0.4.0",
+    "sentence-transformers>=3.0.0",
+]
+cloud = [
+    "langchain-google-genai>=2.0.0",
+    "langchain-groq>=0.3.0",
+    "pinecone>=7.0.2",
+]
+all-providers = [
+    "chromadb>=1.0.0",
+    "langchain-ollama>=1.0.0",
+    "langchain-huggingface>=1.0.0",
+    "pgvector>=0.4.0",
+    "sentence-transformers>=3.0.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-groq>=0.3.0",
+    "pinecone>=7.0.2",
+]
+
 [dependency-groups]
 lint = ["ruff>=0.15.9", "mypy>=1.20.0"]
 test = [
@@ -85,10 +109,9 @@ warn_unused_ignores = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-# langchain_anthropic stubs require `timeout` and `stop` as positional args in
-# one overload; at runtime these are optional kwargs. Suppress the false
-# positive across the chain nodes that instantiate ChatAnthropic.
-module = ["chain.nodes.confirmation", "chain.nodes.refinement"]
+# Some LangChain provider stubs require optional runtime kwargs as positional
+# args in one overload. Suppress that false positive in the provider factory.
+module = "chain.utils.llm_factory"
 disable_error_code = ["call-arg"]
 
 [[tool.mypy.overrides]]

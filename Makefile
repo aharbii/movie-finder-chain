@@ -147,6 +147,7 @@ test-coverage:
 	$(call exec_or_run,sh -c 'mkdir -p reports && pytest tests/ --asyncio-mode=auto -v --tb=short \
 		--junitxml=$(JUNIT_XML) \
 		--cov=chain \
+		--cov-branch \
 		--cov-report=term-missing \
 		--cov-report=xml:$(COVERAGE_XML) \
 		--cov-report=html:$(COVERAGE_HTML)')

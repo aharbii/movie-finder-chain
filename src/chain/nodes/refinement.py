@@ -11,13 +11,11 @@ from __future__ import annotations
 import importlib.resources
 from typing import Any, cast
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from pydantic import SecretStr
 
-from chain.config import get_config
 from chain.models.output import RefinementPlan
 from chain.state import MovieFinderState
+from chain.utils.llm_factory import get_classifier_llm
 from chain.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +30,6 @@ async def refinement_node(state: MovieFinderState) -> dict[str, Any]:
     Returns:
         Partial state update with user_plot_query, messages, and refinement_count.
     """
-    cfg = get_config()
     messages: list[BaseMessage] = state.get("messages", [])
     original_query: str = state.get("user_plot_query") or ""
     refinement_count: int = state.get("refinement_count", 0)
@@ -44,10 +41,7 @@ async def refinement_node(state: MovieFinderState) -> dict[str, Any]:
         original_query=original_query,
     )
 
-    llm = ChatAnthropic(
-        model_name=cfg.classifier_model,
-        api_key=SecretStr(cfg.anthropic_api_key),
-    ).with_structured_output(RefinementPlan)
+    llm = get_classifier_llm().with_structured_output(RefinementPlan)
 
     try:
         result = cast(RefinementPlan, await llm.ainvoke([HumanMessage(content=prompt_text)]))

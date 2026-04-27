@@ -85,8 +85,8 @@ pipeline {
                         sourceDirectories: [[path: 'src']],
                         failOnError: false,
                         qualityGates: [
-                            [threshold: 10.0, metric: 'LINE', baseline: 'PROJECT'],
-                            [threshold: 10.0, metric: 'BRANCH', baseline: 'PROJECT']
+                            [threshold: 90.0, metric: 'LINE', baseline: 'PROJECT'],
+                            [threshold: 90.0, metric: 'BRANCH', baseline: 'PROJECT']
                         ]
                     )
                 }

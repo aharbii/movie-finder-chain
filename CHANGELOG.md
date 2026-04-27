@@ -12,6 +12,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - `Makefile` with Docker-backed repo-local targets for `dev`, `lint`, `format`,
   `typecheck`, `test`, `test-coverage`, `pre-commit`, and the example scripts
+- ADR 0008 provider factories for classifier LLMs, reasoning LLMs, query
+  embeddings, and vector search providers
+- Query-time vector store providers for Qdrant, ChromaDB, Pinecone, and pgvector
+  using the shared `{prefix}_{sanitized_model}_{dimension}` target naming contract
+- Optional dependency groups for local/cloud provider SDKs (`local`, `cloud`,
+  `all-providers`)
 - `LOG_FORMAT` env var documented in `.env.example` — `text` (default) or `json`
   for Azure Monitor / structured log pipelines
 - GitHub Actions CI workflow (`.github/workflows/ci.yml`) mirroring Jenkins 1:1:
@@ -47,13 +53,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `Dockerfile`, `.vscode/*`, `README.md`, and `CONTRIBUTING.md` now follow the
   Docker-only local development contract
 - Chain configuration now consumes the canonical read-only Qdrant env vars:
-  `QDRANT_URL`, `QDRANT_API_KEY_RO`, and `QDRANT_COLLECTION_NAME`
+  `QDRANT_URL`, `QDRANT_API_KEY_RO`, and `VECTOR_COLLECTION_PREFIX`
+- `confirmation`, `refinement`, and `qa_agent` nodes now consume cached LLM
+  factories instead of constructing Anthropic clients directly
+- `MovieSearchService` now consumes embedding and vector-store factories instead
+  of constructing OpenAI and Qdrant clients directly
 - `Jenkinsfile` — added `sourceDirectories` to `recordCoverage`; coverage.xml
   now emits workspace-relative paths via `relative_files = true` in pyproject.toml;
   removed Build App Image stage (image builds now orchestrated by the root pipeline)
 - All test outputs (`junit.xml`, `coverage.xml`, `htmlcov/`) now written to a `reports/`
   subdirectory; `Makefile` paths updated accordingly; `.gitignore` updated to a single
   `reports/` entry
+- Branch coverage is now enabled in the Docker-backed coverage target with 90%
+  Jenkins and GitHub Actions quality thresholds
 
 ---
 
