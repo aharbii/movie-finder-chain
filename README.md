@@ -142,8 +142,6 @@ cp .env.example .env
 | `QDRANT_API_KEY_RO`      | live runs | Read-only Qdrant API key                             |
 | `VECTOR_STORE`           | optional  | Vector store provider (default: `qdrant`)            |
 | `VECTOR_COLLECTION_PREFIX` | optional | Dynamic vector collection prefix (default: `movies`) |
-| `VECTOR_STORE_URL`       | optional  | Generic vector store URL override                    |
-| `VECTOR_STORE_API_KEY`   | optional  | Generic vector store API key override                |
 | `EMBEDDING_PROVIDER`     | optional  | Embedding provider (default: `openai`)               |
 | `EMBEDDING_MODEL`        | optional  | Embedding model (default: `text-embedding-3-large`)  |
 | `EMBEDDING_DIMENSION`    | optional  | Embedding dimension (default: `3072`)                |
@@ -338,9 +336,8 @@ LANGSMITH_API_KEY=<your key>
 LANGSMITH_PROJECT=movie-finder
 ```
 
-The graph mirrors these to the legacy `LANGCHAIN_*` aliases automatically. Each graph invocation
-produces a run trace showing all nodes, LLM calls, tool invocations, and
-their latencies.
+Each graph invocation produces a run trace showing all nodes, LLM calls, tool
+invocations, and their latencies.
 
 ---
 

@@ -31,8 +31,8 @@ from pathlib import Path
 # Nodes are never executed here — we only compile the graph structure.
 # ---------------------------------------------------------------------------
 _STUBS: dict[str, str] = {
-    "QDRANT_ENDPOINT": "https://stub.qdrant.io",
-    "QDRANT_API_KEY": "stub",  # pragma: allowlist secret
+    "QDRANT_URL": "https://stub.qdrant.io",
+    "QDRANT_API_KEY_RO": "stub",  # pragma: allowlist secret
     "OPENAI_API_KEY": "stub",  # pragma: allowlist secret
     "ANTHROPIC_API_KEY": "stub",  # pragma: allowlist secret
 }

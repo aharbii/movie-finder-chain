@@ -77,28 +77,6 @@ def test_qdrant_provider(
         )
 
 
-def test_qdrant_provider_uses_generic_vector_credentials() -> None:
-    config = ChainConfig(
-        vector_store="qdrant",
-        qdrant_url=None,
-        qdrant_api_key_ro=None,
-        vector_store_url="http://localhost:6333",
-        vector_store_api_key="generic-key",
-    )
-
-    mock_qdrant_client = MagicMock()
-    mock_module = MagicMock()
-    mock_module.QdrantClient.return_value = mock_qdrant_client
-
-    with patch.dict(sys.modules, {"qdrant_client": mock_module}):
-        QdrantVectorSearchProvider(config)
-
-    mock_module.QdrantClient.assert_called_once_with(
-        url="http://localhost:6333",
-        api_key="generic-key",
-    )
-
-
 def test_chromadb_provider(
     monkeypatch: pytest.MonkeyPatch, mock_embedding_model: EmbeddingModelMetadata
 ) -> None:
@@ -196,17 +174,6 @@ def test_pinecone_provider(
         provider2._client.Index.assert_called_with(host="https://test-host")
 
 
-def test_pinecone_provider_uses_generic_vector_api_key() -> None:
-    config = ChainConfig(vector_store="pinecone", vector_store_api_key="generic-key")
-
-    mock_module = MagicMock()
-
-    with patch.dict(sys.modules, {"pinecone": mock_module}):
-        PineconeVectorSearchProvider(config)
-
-    mock_module.Pinecone.assert_called_once_with(api_key="generic-key")
-
-
 def test_import_errors() -> None:
     config = ChainConfig()
 
@@ -271,25 +238,6 @@ def test_pgvector_provider(
         mock_psycopg_module.connect.assert_called_once_with("postgres://user:pass@localhost/db")
         mock_pgvector_module.register_vector.assert_called_once_with(mock_conn)
         mock_cursor.execute.assert_called_once()
-
-
-def test_pgvector_provider_uses_generic_vector_store_url() -> None:
-    config = ChainConfig(vector_store="pgvector", vector_store_url="postgres://user:pass@host/db")
-
-    mock_psycopg_module = MagicMock()
-    mock_pgvector_module = MagicMock()
-    mock_conn = MagicMock()
-    mock_psycopg_module.connect.return_value = mock_conn
-
-    with patch.dict(
-        sys.modules,
-        {"psycopg": mock_psycopg_module, "pgvector.psycopg": mock_pgvector_module},
-    ):
-        provider = PGVectorSearchProvider(config)
-        provider._connect()
-
-    mock_psycopg_module.connect.assert_called_once_with("postgres://user:pass@host/db")
-    mock_pgvector_module.register_vector.assert_called_once_with(mock_conn)
 
 
 def test_create_vector_search_provider_factory(monkeypatch: pytest.MonkeyPatch) -> None:

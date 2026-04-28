@@ -54,7 +54,7 @@ attached-container workflow.
 ```
 QDRANT_URL=
 QDRANT_API_KEY_RO=
-QDRANT_COLLECTION_NAME=movies
+VECTOR_COLLECTION_PREFIX=movies
 EMBEDDING_MODEL=text-embedding-3-large
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=

@@ -55,11 +55,8 @@ class QdrantVectorSearchProvider:
 
         self._config = config
         self._client = QdrantClient(
-            url=_required(config.qdrant_url or config.vector_store_url, "QDRANT_URL"),
-            api_key=_required(
-                config.qdrant_api_key_ro or config.vector_store_api_key,
-                "QDRANT_API_KEY_RO",
-            ),
+            url=_required(config.qdrant_url, "QDRANT_URL"),
+            api_key=_required(config.qdrant_api_key_ro, "QDRANT_API_KEY_RO"),
         )
 
     def target_name(self, embedding_model: EmbeddingModelMetadata) -> str:
@@ -150,11 +147,7 @@ class PineconeVectorSearchProvider:
             ) from exc
 
         self._config = config
-        self._client = Pinecone(
-            api_key=_required(
-                config.pinecone_api_key or config.vector_store_api_key, "PINECONE_API_KEY"
-            )
-        )
+        self._client = Pinecone(api_key=_required(config.pinecone_api_key, "PINECONE_API_KEY"))
         self._index_host = config.pinecone_index_host
         self._index_name = config.pinecone_index_name
         self._index: Any | None = None
@@ -249,9 +242,7 @@ class PGVectorSearchProvider:
         return [VectorSearchHit(payload=_cast_payload(row[0]), score=float(row[1])) for row in rows]
 
     def _connect(self) -> Any:
-        connection = self._psycopg.connect(
-            _required(self._config.pgvector_dsn or self._config.vector_store_url, "PGVECTOR_DSN")
-        )
+        connection = self._psycopg.connect(_required(self._config.pgvector_dsn, "PGVECTOR_DSN"))
         self._register_vector(connection)
         return connection
 

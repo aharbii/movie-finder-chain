@@ -35,8 +35,8 @@ Set the following env vars to enable tracing:
     LANGSMITH_API_KEY=<your key>
     LANGSMITH_PROJECT=movie-finder
 
-The graph mirrors these to the legacy `LANGCHAIN_*` aliases at runtime so
-LangChain/LangGraph tracing still activates automatically.
+The graph exports these values at runtime because LangSmith reads directly
+from process environment variables.
 """
 
 from __future__ import annotations
@@ -130,15 +130,11 @@ def _apply_langsmith_env() -> None:
         return
 
     vars_to_set = {
-        "LANGCHAIN_TRACING_V2": "true",
         "LANGSMITH_TRACING": "true",
-        "LANGCHAIN_ENDPOINT": cfg.langsmith_endpoint,
         "LANGSMITH_ENDPOINT": cfg.langsmith_endpoint,
-        "LANGCHAIN_PROJECT": cfg.langsmith_project,
         "LANGSMITH_PROJECT": cfg.langsmith_project,
     }
     if cfg.langsmith_api_key:
-        vars_to_set["LANGCHAIN_API_KEY"] = cfg.langsmith_api_key
         vars_to_set["LANGSMITH_API_KEY"] = cfg.langsmith_api_key
 
     for key, value in vars_to_set.items():

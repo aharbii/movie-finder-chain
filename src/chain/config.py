@@ -11,7 +11,7 @@ import re
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ChatProvider = Literal["anthropic", "openai", "groq", "together", "ollama", "google"]
@@ -32,8 +32,6 @@ class ChainConfig(BaseSettings):
         qdrant_api_key_ro: Read-only API key for the cluster.
         vector_store: Vector store provider.
         vector_collection_prefix: Prefix for dynamically resolved vector collections.
-        vector_store_url: Generic vector store URL override.
-        vector_store_api_key: Generic vector store API key override.
         chromadb_persist_path: Local ChromaDB persistence path.
         pinecone_api_key: Pinecone API key.
         pinecone_index_name: Pinecone index name.
@@ -79,17 +77,9 @@ class ChainConfig(BaseSettings):
         None,
         alias="QDRANT_URL",
     )
-    qdrant_api_key_ro: str | None = Field(
-        None,
-        validation_alias=AliasChoices("QDRANT_API_KEY_RO", "QDRANT_API_KEY"),
-    )
+    qdrant_api_key_ro: str | None = Field(None, alias="QDRANT_API_KEY_RO")
     vector_store: VectorStoreProvider = Field("qdrant", alias="VECTOR_STORE")
-    vector_collection_prefix: str = Field(
-        "movies",
-        validation_alias=AliasChoices("VECTOR_COLLECTION_PREFIX", "QDRANT_COLLECTION_PREFIX"),
-    )
-    vector_store_url: str | None = Field(None, alias="VECTOR_STORE_URL")
-    vector_store_api_key: str | None = Field(None, alias="VECTOR_STORE_API_KEY")
+    vector_collection_prefix: str = Field("movies", alias="VECTOR_COLLECTION_PREFIX")
     chromadb_persist_path: str = Field(
         "outputs/chromadb/local",
         alias="CHROMADB_PERSIST_PATH",
@@ -108,10 +98,7 @@ class ChainConfig(BaseSettings):
     groq_api_key: str | None = Field(None, alias="GROQ_API_KEY")
     together_api_key: str | None = Field(None, alias="TOGETHER_API_KEY")
     google_api_key: str | None = Field(None, alias="GOOGLE_API_KEY")
-    ollama_base_url: str = Field(
-        "http://localhost:11434",
-        validation_alias=AliasChoices("OLLAMA_BASE_URL", "OLLAMA_URL"),
-    )
+    ollama_base_url: str = Field("http://localhost:11434", alias="OLLAMA_BASE_URL")
     database_url: str | None = Field(None, alias="DATABASE_URL")
 
     # --- Models ---
@@ -119,7 +106,7 @@ class ChainConfig(BaseSettings):
     embedding_model: str = Field("text-embedding-3-large", alias="EMBEDDING_MODEL")
     embedding_dimension: int = Field(
         3072,
-        validation_alias=AliasChoices("EMBEDDING_DIMENSION", "EMBEDDING_DIMENSIONS"),
+        alias="EMBEDDING_DIMENSION",
         ge=1,
     )
     classifier_provider: ChatProvider = Field("anthropic", alias="CLASSIFIER_PROVIDER")
@@ -157,16 +144,6 @@ class ChainConfig(BaseSettings):
             model=self.embedding_model,
             dimension=self.embedding_dimension,
         )
-
-    @property
-    def qdrant_collection_prefix(self) -> str:
-        """Return the legacy Qdrant collection prefix alias."""
-        return self.vector_collection_prefix
-
-    @property
-    def qdrant_collection_name(self) -> str:
-        """Return the Qdrant collection name for backward-compatible callers."""
-        return self.vector_collection_name
 
     @field_validator(
         "qdrant_url",
@@ -238,11 +215,6 @@ def resolve_vector_collection_name(prefix: str, model: str, dimension: int) -> s
     trim leading/trailing underscores.
     """
     return f"{prefix}_{sanitize_model_name(model)}_{dimension}"
-
-
-def resolve_qdrant_collection_name(prefix: str, model: str, dimension: int) -> str:
-    """Backward-compatible alias for the Qdrant collection naming contract."""
-    return resolve_vector_collection_name(prefix, model, dimension)
 
 
 def sanitize_model_name(model: str) -> str:

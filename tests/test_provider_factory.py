@@ -25,11 +25,11 @@ def test_sanitize_model_name_matches_rag_contract() -> None:
     assert sanitize_model_name("foo@bar---baz") == "foo_bar_baz"
 
 
-def test_qdrant_collection_prefix_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vector_collection_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VECTOR_STORE", "qdrant")
     monkeypatch.setenv("VECTOR_COLLECTION_PREFIX", "test_prefix")
     config = ChainConfig()
-    assert config.qdrant_collection_prefix == "test_prefix"
+    assert config.vector_collection_prefix == "test_prefix"
 
 
 def test_validate_url_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -44,10 +44,8 @@ def test_validate_collection_prefix_blank(monkeypatch: pytest.MonkeyPatch) -> No
         ChainConfig()
 
 
-def test_resolve_qdrant_collection_name_alias() -> None:
-    from chain.config import resolve_qdrant_collection_name
-
-    assert resolve_qdrant_collection_name("movies", "test-model", 128) == "movies_test_model_128"
+def test_resolve_vector_collection_name() -> None:
+    assert resolve_vector_collection_name("movies", "test-model", 128) == "movies_test_model_128"
     assert (
         resolve_vector_collection_name("movies", "text-embedding-3-large", 3072)
         == "movies_text_embedding_3_large_3072"
@@ -63,7 +61,6 @@ def test_config_rejects_unknown_providers(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_config_exposes_generic_vector_collection_name(mock_config: ChainConfig) -> None:
     assert mock_config.vector_collection_name == "movies_text_embedding_3_large_3072"
-    assert mock_config.qdrant_collection_name == mock_config.vector_collection_name
 
 
 def test_config_can_be_supplied_by_backend_runtime(monkeypatch: pytest.MonkeyPatch) -> None:

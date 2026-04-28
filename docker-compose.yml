@@ -28,7 +28,7 @@ services:
       # --- Qdrant ---
       QDRANT_URL: ${QDRANT_URL:-}
       QDRANT_API_KEY_RO: ${QDRANT_API_KEY_RO:-}
-      QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-movies}
+      VECTOR_COLLECTION_PREFIX: ${VECTOR_COLLECTION_PREFIX:-movies}
       # --- LLM Providers ---
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

@@ -141,10 +141,6 @@ class TestSetupTracingEnv:
             "LANGSMITH_TRACING",
             "LANGSMITH_PROJECT",
             "LANGSMITH_API_KEY",
-            "LANGCHAIN_TRACING_V2",
-            "LANGCHAIN_PROJECT",
-            "LANGCHAIN_API_KEY",
-            "LANGCHAIN_ENDPOINT",
             "LANGSMITH_ENDPOINT",
         ]:
             monkeypatch.delenv(k, raising=False)
@@ -170,10 +166,6 @@ class TestSetupTracingEnv:
             "LANGSMITH_TRACING",
             "LANGSMITH_PROJECT",
             "LANGSMITH_API_KEY",
-            "LANGCHAIN_TRACING_V2",
-            "LANGCHAIN_PROJECT",
-            "LANGCHAIN_API_KEY",
-            "LANGCHAIN_ENDPOINT",
             "LANGSMITH_ENDPOINT",
         ]:
             monkeypatch.delenv(k, raising=False)
@@ -189,7 +181,6 @@ class TestSetupTracingEnv:
 
         assert os.environ["LANGSMITH_TRACING"] == "true"
         assert "LANGSMITH_API_KEY" not in os.environ
-        assert "LANGCHAIN_API_KEY" not in os.environ
 
     def test_apply_langsmith_env_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from chain.config import ChainConfig
