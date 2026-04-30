@@ -34,12 +34,12 @@ After your branch is merged in `aharbii/movie-finder-chain`:
 
 ```bash
 # Level 1 — bump chain inside backend/
-cd /home/aharbi/workset/movie-finder/backend
+cd "$MOVIE_FINDER_ROOT/backend"
 git add chain
 git commit -m "chore(chain): bump to latest main"
 
 # Level 2 — bump backend inside root
-cd /home/aharbi/workset/movie-finder
+cd "$MOVIE_FINDER_ROOT"
 git add backend
 git commit -m "chore(backend): bump to latest main"
 ```
