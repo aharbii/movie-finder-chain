@@ -15,9 +15,9 @@ LangGraph 8-node AI pipeline — the core intelligence layer of Movie Finder.
 `classify` → `search_rag` → `enrich_imdb` → `reason` → `route` → `refine` / `confirm` / `answer`
 
 - **State:** `MovieFinderState` (TypedDict) shared across all nodes
-- **Models:** Claude Haiku (classify), Claude Sonnet (confirmation/refinement/Q&A)
-- **Embeddings:** OpenAI `text-embedding-3-large` at query time (must match ingestion)
-- **Vector search:** Qdrant Cloud (always external)
+- **Models:** classifier and reasoning LLMs resolved by provider factory
+- **Embeddings:** query-time embedding provider resolved by factory (must match ingestion)
+- **Vector search:** vector store provider resolved by factory (default Qdrant Cloud)
 - **IMDb enrichment:** via `imdbapi` submodule (path dependency)
 - **Bounded refinement:** max 3 cycles (`MAX_REFINEMENTS`)
 - **Tracing:** LangSmith (opt-in via `LANGSMITH_TRACING=true`)
@@ -33,8 +33,8 @@ src/chain/
 ├── models/            # Domain data structures
 ├── nodes/             # Individual node implementations (pure functions)
 ├── prompts/           # LLM prompt templates
-├── rag/               # Qdrant vector search wrapper
-└── utils/             # Helpers
+├── rag/               # Vector search providers and RAG search service
+└── utils/             # Helpers and LLM/embedding factories
 ```
 
 ---
@@ -45,9 +45,9 @@ src/chain/
 | ------------ | --------------------------------------------------------------------------- |
 | Language     | Python 3.13, uv workspace member of `backend/`                              |
 | AI pipeline  | LangGraph 0.2+, LangChain 0.3+                                              |
-| LLM          | `langchain-anthropic` — Claude Haiku (classify), Claude Sonnet (reason/Q&A) |
-| Embeddings   | `langchain-openai` — `text-embedding-3-large` (3072-dim)                    |
-| Vector store | `qdrant-client` (Qdrant Cloud — always external)                            |
+| LLM          | Provider factory: Anthropic (default), OpenAI, Groq, Together, Ollama, Google |
+| Embeddings   | Provider factory: OpenAI (default), Ollama, HuggingFace, SentenceTransformers |
+| Vector store | Provider factory: Qdrant (default), ChromaDB, Pinecone, pgvector              |
 | IMDb         | `imdbapi` submodule (path dependency)                                       |
 | Tracing      | LangSmith (`LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`)   |
 | Tests        | `pytest --asyncio-mode=auto`, verbose                                       |
@@ -57,12 +57,12 @@ src/chain/
 ## Environment variables (`.env.example`)
 
 ```
-QDRANT_URL, QDRANT_API_KEY_RO, QDRANT_COLLECTION_NAME
-EMBEDDING_MODEL=text-embedding-3-large, EMBEDDING_DIMENSION=3072
-ANTHROPIC_API_KEY
-CLASSIFIER_MODEL=claude-haiku-4-5-20251001
-REASONING_MODEL=claude-sonnet-4-6
-OPENAI_API_KEY
+QDRANT_URL, QDRANT_API_KEY_RO
+VECTOR_STORE=qdrant, VECTOR_COLLECTION_PREFIX=movies
+EMBEDDING_PROVIDER=openai, EMBEDDING_MODEL=text-embedding-3-large, EMBEDDING_DIMENSION=3072
+CLASSIFIER_PROVIDER=anthropic, CLASSIFIER_MODEL=claude-haiku-4-5-20251001
+REASONING_PROVIDER=anthropic, REASONING_MODEL=claude-sonnet-4-6
+ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, TOGETHER_API_KEY, GOOGLE_API_KEY
 RAG_TOP_K=8, MAX_REFINEMENTS=3, IMDB_SEARCH_LIMIT=3, CONFIDENCE_THRESHOLD=0.3
 LOG_LEVEL
 LANGSMITH_TRACING=false, LANGSMITH_ENDPOINT, LANGSMITH_API_KEY, LANGSMITH_PROJECT
@@ -76,13 +76,15 @@ LANGSMITH_TRACING=false, LANGSMITH_ENDPOINT, LANGSMITH_API_KEY, LANGSMITH_PROJEC
 | ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | **State machine**        | `graph.py`                         | New behaviour = new node or new edge. Never add conditional branching inside an existing node to handle a different phase.      |
 | **Pure functions**       | `nodes/`                           | Nodes take `MovieFinderState` and return a partial state update. No side effects except external I/O (LLM calls, Qdrant, IMDb). |
-| **Strategy**             | LLM / embedding providers          | New model = new config value, not a new code path. The provider interface stays the same.                                       |
+| **Strategy**             | LLM / embedding / vector providers | New provider = new strategy implementation, not branching in node logic.                                                        |
 | **Configuration object** | `config.py`                        | All settings loaded via `Pydantic BaseSettings` once at startup. Never `os.getenv()` inside node functions.                     |
-| **Adapter**              | `rag/` wrapper                     | The Qdrant wrapper adapts the client library to the domain interface. Nodes never call `qdrant-client` directly.                |
-| **Factory**              | `graph.py`                         | Node creation and graph wiring is centralised here. Nodes are registered once.                                                  |
+| **Adapter**              | `rag/` providers                   | Vector store providers adapt client libraries to the domain interface. Nodes never call vector SDKs directly.                   |
+| **Factory**              | `utils/llm_factory.py`, `rag/`      | Provider objects are created in cached factories and consumed by nodes/services.                                                |
 
-**Critical state rule:** `MovieFinderState` has `total=False` (issue #15 — tracked, not yet fixed).
-When reading state fields in nodes, always use `.get()` with a safe default until this is resolved.
+**Critical state rule:** Access `MovieFinderState` fields safely with `.get()` and defaults.
+
+**Vector naming invariant:** Query-time and ingestion-time vector targets must both resolve
+`{prefix}_{sanitized_model}_{dimension}` using the same sanitization contract as `rag/`.
 
 ---
 
@@ -118,6 +120,7 @@ Hooks: whitespace/YAML/safety checks, `detect-secrets`, `mypy --strict`, `ruff-c
 
 - Gitlink path is `chain` inside `aharbii/movie-finder-backend`. Parent path filters must use `chain`, not `chain/**`.
 - Embedding model change here requires coordinating with `rag/` — query-time and ingestion-time embeddings must match.
+- Vector store or collection naming changes require coordinating with `rag/`, backend env wiring, and infrastructure.
 
 Run `/session-start` in root workspace.
 

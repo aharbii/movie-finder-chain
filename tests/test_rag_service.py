@@ -1,6 +1,6 @@
 """Tests for MovieSearchService.
 
-All OpenAI and Qdrant calls are mocked — no real network traffic.
+All embedding and vector-store calls are mocked — no real network traffic.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import pytest
 
 from chain.models.output import RagCandidate
 from chain.rag.service import MovieSearchService, _to_list
+from chain.rag.vector_store import VectorSearchHit
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -19,8 +20,8 @@ from chain.rag.service import MovieSearchService, _to_list
 
 
 @pytest.fixture
-def fake_qdrant_points() -> list[MagicMock]:
-    """Three fake Qdrant ScoredPoint objects."""
+def fake_vector_hits() -> list[MagicMock]:
+    """Three fake vector-search hits."""
 
     def _make_point(payload: dict[str, Any]) -> MagicMock:
         pt = MagicMock()
@@ -54,16 +55,16 @@ def fake_qdrant_points() -> list[MagicMock]:
 
 @pytest.fixture
 def service(mock_config: Any) -> MovieSearchService:
-    """Return a MovieSearchService with mocked OpenAI and Qdrant clients."""
+    """Return a MovieSearchService with mocked embedding and Qdrant clients."""
     with (
-        patch("chain.rag.service.OpenAI"),
-        patch("chain.rag.service.QdrantClient"),
+        patch("chain.rag.service.get_query_embedder"),
+        patch("chain.rag.service.get_vector_search_provider"),
     ):
         svc = MovieSearchService(mock_config)
 
     # Replace real clients with controllable mocks
-    svc._openai = MagicMock()
-    svc._qdrant = MagicMock()
+    svc._embedder = MagicMock()
+    svc._vector_store = MagicMock()
     return svc
 
 
@@ -73,18 +74,16 @@ def service(mock_config: Any) -> MovieSearchService:
 
 
 def test_search_returns_rag_candidates(
-    service: MovieSearchService, fake_qdrant_points: list[MagicMock]
+    service: MovieSearchService, fake_vector_hits: list[MagicMock]
 ) -> None:
-    # Arrange: OpenAI returns a fake embedding vector
-    embedding_response = MagicMock()
-    embedding_response.data = [MagicMock(embedding=[0.1] * 3072)]
-    embedding_response.usage.total_tokens = 10
-    cast(Any, service._openai.embeddings).create.return_value = embedding_response
+    # Arrange: embedding provider returns a fake vector
+    cast(Any, service._embedder).embed_query.return_value = [0.1] * 3072
 
-    # Arrange: Qdrant returns our fake points
-    qdrant_response = MagicMock()
-    qdrant_response.points = fake_qdrant_points
-    cast(Any, service._qdrant).query_points.return_value = qdrant_response
+    # Arrange: vector store returns our fake hits
+    cast(Any, service._vector_store).search.return_value = [
+        VectorSearchHit(payload=cast(dict[str, Any], point.payload), score=0.9)
+        for point in fake_vector_hits
+    ]
 
     # Act
     results = service.search("a heist movie set in dreams", top_k=3)
@@ -94,57 +93,44 @@ def test_search_returns_rag_candidates(
     assert all(isinstance(r, RagCandidate) for r in results)
 
 
-def test_search_uses_correct_embedding_model(
-    service: MovieSearchService, fake_qdrant_points: list[MagicMock]
+def test_search_uses_query_embedder(
+    service: MovieSearchService, fake_vector_hits: list[MagicMock]
 ) -> None:
-    embedding_response = MagicMock()
-    embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
-    embedding_response.usage.total_tokens = 5
-    cast(Any, service._openai.embeddings).create.return_value = embedding_response
+    cast(Any, service._embedder).embed_query.return_value = [0.0] * 3072
 
-    qdrant_response = MagicMock()
-    qdrant_response.points = []
-    cast(Any, service._qdrant).query_points.return_value = qdrant_response
+    cast(Any, service._vector_store).search.return_value = []
 
     service.search("test query")
 
-    cast(Any, service._openai.embeddings).create.assert_called_once_with(
-        input="test query",
-        model=service._embedding_model,
-    )
+    cast(Any, service._embedder).embed_query.assert_called_once_with("test query")
 
 
-def test_search_uses_correct_collection(
-    service: MovieSearchService, fake_qdrant_points: list[MagicMock]
+def test_search_uses_correct_vector_target(
+    service: MovieSearchService, fake_vector_hits: list[MagicMock]
 ) -> None:
-    embedding_response = MagicMock()
-    embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
-    embedding_response.usage.total_tokens = 5
-    cast(Any, service._openai.embeddings).create.return_value = embedding_response
+    cast(Any, service._embedder).embed_query.return_value = [0.0] * 3072
 
-    qdrant_response = MagicMock()
-    qdrant_response.points = []
-    cast(Any, service._qdrant).query_points.return_value = qdrant_response
+    cast(Any, service._vector_store).search.return_value = []
 
     service.search("test query", top_k=5)
 
-    call_kwargs = cast(Any, service._qdrant.query_points).call_args
-    assert call_kwargs.kwargs["collection_name"] == service._collection
-    assert call_kwargs.kwargs["limit"] == 5
+    cast(Any, service._vector_store).search.assert_called_once_with(
+        [0.0] * 3072,
+        5,
+        service._embedding_model,
+    )
 
 
 def test_search_normalises_genre_string(
-    service: MovieSearchService, fake_qdrant_points: list[MagicMock]
+    service: MovieSearchService, fake_vector_hits: list[MagicMock]
 ) -> None:
     """Slash-separated genre strings are split into a list."""
-    embedding_response = MagicMock()
-    embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
-    embedding_response.usage.total_tokens = 5
-    cast(Any, service._openai.embeddings).create.return_value = embedding_response
+    cast(Any, service._embedder).embed_query.return_value = [0.0] * 3072
 
-    qdrant_response = MagicMock()
-    qdrant_response.points = fake_qdrant_points
-    cast(Any, service._qdrant).query_points.return_value = qdrant_response
+    cast(Any, service._vector_store).search.return_value = [
+        VectorSearchHit(payload=cast(dict[str, Any], point.payload), score=0.9)
+        for point in fake_vector_hits
+    ]
 
     results = service.search("query")
 
@@ -156,17 +142,15 @@ def test_search_normalises_genre_string(
 
 
 def test_search_handles_missing_year(
-    service: MovieSearchService, fake_qdrant_points: list[MagicMock]
+    service: MovieSearchService, fake_vector_hits: list[MagicMock]
 ) -> None:
     """Points with release_year=None default to 0, not a crash."""
-    embedding_response = MagicMock()
-    embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
-    embedding_response.usage.total_tokens = 5
-    cast(Any, service._openai.embeddings).create.return_value = embedding_response
+    cast(Any, service._embedder).embed_query.return_value = [0.0] * 3072
 
-    qdrant_response = MagicMock()
-    qdrant_response.points = fake_qdrant_points
-    cast(Any, service._qdrant).query_points.return_value = qdrant_response
+    cast(Any, service._vector_store).search.return_value = [
+        VectorSearchHit(payload=cast(dict[str, Any], point.payload), score=0.9)
+        for point in fake_vector_hits
+    ]
 
     results = service.search("query")
     ghost = next(r for r in results if r.title == "Ghost Movie")
@@ -174,15 +158,10 @@ def test_search_handles_missing_year(
 
 
 def test_search_empty_results(service: MovieSearchService) -> None:
-    """Empty Qdrant results produce an empty list — no crash."""
-    embedding_response = MagicMock()
-    embedding_response.data = [MagicMock(embedding=[0.0] * 3072)]
-    embedding_response.usage.total_tokens = 3
-    cast(Any, service._openai.embeddings).create.return_value = embedding_response
+    """Empty vector search results produce an empty list — no crash."""
+    cast(Any, service._embedder).embed_query.return_value = [0.0] * 3072
 
-    qdrant_response = MagicMock()
-    qdrant_response.points = []
-    cast(Any, service._qdrant).query_points.return_value = qdrant_response
+    cast(Any, service._vector_store).search.return_value = []
 
     results = service.search("obscure movie nobody remembers")
     assert results == []

@@ -17,16 +17,92 @@ dependencies = [
     "langgraph>=0.2.0",
     "langgraph-checkpoint-postgres>=2.0.0",
     "psycopg[binary,pool]>=3.2.0",
-    "langchain-anthropic>=0.3.0",
-    "langchain-openai>=0.3.0",
     "langchain-core>=0.3.0",
     "langsmith>=0.1.0",
-    "qdrant-client>=1.17.1",
-    "openai>=2.29.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
     "langchain>=1.2.13",
+]
+
+[project.optional-dependencies]
+anthropic = [
+    "langchain-anthropic>=0.3.0",
+]
+openai = [
+    "langchain-openai>=0.3.0",
+    "openai>=2.29.0",
+]
+qdrant = [
+    "qdrant-client>=1.17.1",
+]
+ollama = [
+    "langchain-ollama>=1.0.0",
+]
+google = [
+    "langchain-google-genai>=2.0.0",
+]
+groq = [
+    "langchain-groq>=0.3.0",
+]
+together = [
+    "langchain-openai>=0.3.0",
+]
+chromadb = [
+    "chromadb>=1.0.0",
+]
+pinecone = [
+    "pinecone>=7.0.2",
+]
+pgvector = [
+    "pgvector>=0.4.0",
+]
+huggingface = [
+    "langchain-huggingface>=1.0.0",
+]
+sentence-transformers = [
+    "langchain-huggingface>=1.0.0",
+    "sentence-transformers>=3.0.0",
+]
+default-cloud = [
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "openai>=2.29.0",
+    "qdrant-client>=1.17.1",
+]
+ollama-qdrant = [
+    "langchain-ollama>=1.0.0",
+    "qdrant-client>=1.17.1",
+]
+local = [
+    "chromadb>=1.0.0",
+    "langchain-ollama>=1.0.0",
+    "langchain-huggingface>=1.0.0",
+    "pgvector>=0.4.0",
+    "sentence-transformers>=3.0.0",
+]
+cloud = [
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-groq>=0.3.0",
+    "openai>=2.29.0",
+    "pinecone>=7.0.2",
+    "qdrant-client>=1.17.1",
+]
+all-providers = [
+    "chromadb>=1.0.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-ollama>=1.0.0",
+    "langchain-huggingface>=1.0.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-groq>=0.3.0",
+    "openai>=2.29.0",
+    "pgvector>=0.4.0",
+    "pinecone>=7.0.2",
+    "qdrant-client>=1.17.1",
+    "sentence-transformers>=3.0.0",
 ]
 
 [dependency-groups]
@@ -85,10 +161,9 @@ warn_unused_ignores = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-# langchain_anthropic stubs require `timeout` and `stop` as positional args in
-# one overload; at runtime these are optional kwargs. Suppress the false
-# positive across the chain nodes that instantiate ChatAnthropic.
-module = ["chain.nodes.confirmation", "chain.nodes.refinement"]
+# Some LangChain provider stubs require optional runtime kwargs as positional
+# args in one overload. Suppress that false positive in the provider factory.
+module = "chain.utils.llm_factory"
 disable_error_code = ["call-arg"]
 
 [[tool.mypy.overrides]]

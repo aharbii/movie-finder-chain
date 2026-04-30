@@ -32,13 +32,13 @@ User message
 
 | Node              | Model                      | Responsibility                                                  |
 | ----------------- | -------------------------- | --------------------------------------------------------------- |
-| `rag_search`      | —                          | Embed query with OpenAI, search Qdrant, return top-k candidates |
+| `rag_search`      | Embedding factory           | Embed query, search vector store, return top-k candidates       |
 | `imdb_enrichment` | —                          | Bounded-concurrency IMDb search + timeout-capped enrichment     |
 | `validation`      | —                          | Filter by confidence, deduplicate by IMDb ID, cap at 5          |
 | `presentation`    | —                          | Format candidate pool as an AI message for the user             |
-| `confirmation`    | Claude Haiku               | Classify user response: confirmed / not_found / unclear         |
-| `refinement`      | Claude Sonnet              | Extract new plot details from conversation, build richer query  |
-| `qa_agent`        | Claude Sonnet + IMDb tools | ReAct agent for open-ended movie Q&A                            |
+| `confirmation`    | Classifier factory          | Classify user response: confirmed / not_found / unclear         |
+| `refinement`      | Classifier factory          | Extract new plot details from conversation, build richer query  |
+| `qa_agent`        | Reasoning factory + tools   | ReAct agent for open-ended movie Q&A                            |
 | `dead_end`        | —                          | Graceful exit after max refinement cycles                       |
 
 ### Event-driven design
@@ -79,7 +79,7 @@ chain/
     ├── models/
     │   └── output.py           ← Pydantic output models
     ├── rag/
-    │   └── service.py          ← MovieSearchService (OpenAI embed + Qdrant search)
+    │   └── service.py          ← MovieSearchService (embedding + vector search)
     └── nodes/
         ├── rag_search.py
         ├── imdb_enrichment.py
@@ -140,13 +140,19 @@ cp .env.example .env
 | ------------------------ | --------- | ---------------------------------------------------- |
 | `QDRANT_URL`             | live runs | Qdrant Cloud cluster URL                             |
 | `QDRANT_API_KEY_RO`      | live runs | Read-only Qdrant API key                             |
-| `QDRANT_COLLECTION_NAME` | optional  | Collection name (default: `movies`)                  |
-| `OPENAI_API_KEY`         | live runs | OpenAI embeddings for RAG queries                    |
-| `ANTHROPIC_API_KEY`      | live runs | Claude models for confirmation, refinement, and Q&A  |
+| `VECTOR_STORE`           | optional  | Vector store provider (default: `qdrant`)            |
+| `VECTOR_COLLECTION_PREFIX` | optional | Dynamic vector collection prefix (default: `movies`) |
+| `EMBEDDING_PROVIDER`     | optional  | Embedding provider (default: `openai`)               |
+| `EMBEDDING_MODEL`        | optional  | Embedding model (default: `text-embedding-3-large`)  |
+| `EMBEDDING_DIMENSION`    | optional  | Embedding dimension (default: `3072`)                |
+| `CLASSIFIER_PROVIDER`    | optional  | Classifier LLM provider (default: `anthropic`)       |
+| `REASONING_PROVIDER`     | optional  | Reasoning LLM provider (default: `anthropic`)        |
+| `OPENAI_API_KEY`         | live runs | Required when using OpenAI embeddings or chat        |
+| `ANTHROPIC_API_KEY`      | live runs | Required when using Anthropic chat models            |
 | `DATABASE_URL`           | optional  | Postgres URL for persistent LangGraph checkpoints    |
 | `CLASSIFIER_MODEL`       | optional  | Default: `claude-haiku-4-5-20251001`                 |
 | `REASONING_MODEL`        | optional  | Default: `claude-sonnet-4-6`                         |
-| `RAG_TOP_K`              | optional  | Qdrant result count (default: `8`)                   |
+| `RAG_TOP_K`              | optional  | Vector result count (default: `8`)                   |
 | `MAX_REFINEMENTS`        | optional  | Max refinement cycles before dead-end (default: `3`) |
 | `IMDB_SEARCH_LIMIT`      | optional  | Max IMDb search hits per candidate (default: `3`)    |
 | `IMDB_SEARCH_CONCURRENCY` | optional | Max concurrent IMDb search requests (default: `2`)   |
@@ -330,9 +336,8 @@ LANGSMITH_API_KEY=<your key>
 LANGSMITH_PROJECT=movie-finder
 ```
 
-The graph mirrors these to the legacy `LANGCHAIN_*` aliases automatically. Each graph invocation
-produces a run trace showing all nodes, LLM calls, tool invocations, and
-their latencies.
+Each graph invocation produces a run trace showing all nodes, LLM calls, tool
+invocations, and their latencies.
 
 ---
 
@@ -341,10 +346,14 @@ their latencies.
 | Package               | Purpose                                                             |
 | --------------------- | ------------------------------------------------------------------- |
 | `langgraph`           | Stateful graph runtime                                              |
-| `langchain-anthropic` | Claude models (classifier + Q&A agent)                              |
+| `langchain-anthropic` | Default Claude model provider                                        |
+| `langchain-openai`    | Default OpenAI-compatible chat/embedding provider                    |
 | `langchain-core`      | Message types, tool protocol                                        |
 | `langsmith`           | Observability / tracing                                             |
 | `imdbapi-client`      | IMDb REST API client (path dep from `./imdbapi` — nested submodule) |
-| `openai`              | `text-embedding-3-large` for RAG query embedding                    |
-| `qdrant-client`       | Vector search against the movie plot collection                     |
+| `openai`              | Default `text-embedding-3-large` query embedding                     |
+| `qdrant-client`       | Default vector search backend                                       |
 | `pydantic-settings`   | Env-var configuration with validation                               |
+
+Optional vector-store SDKs are installed through extras: `chromadb` and
+`pgvector` in `local`, `pinecone` in `cloud`.
